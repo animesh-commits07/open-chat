@@ -1,1 +1,315 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenChat</title><link rel="stylesheet" href="style.css"></head><body><div class="app-shell"><aside class="sidebar"><div class="brand">◉ OpenChat</div><button>＋ New chat</button><nav><button>⌕ Search chats</button><button>◫ Public chat</button></nav><div class="spacer"></div><div class="profile"><div class="avatar" id="sideAvatar">?</div><div><strong id="sideName">Guest</strong><small>No account needed</small></div></div></aside><main><header><div><h1>Public Chat</h1><p>Anyone opening this site can read and reply</p></div><div><button id="notifyBtn" type="button">🔔 Enable notifications</button> <button id="changeName" type="button">Change name</button></div></header><section id="messages" class="messages"></section><div class="composer-wrap"><form id="form" class="composer"><textarea id="message" maxlength="1000" rows="1" placeholder="Message OpenChat..." required></textarea><div class="bottom"><span id="status">Messages are saved for everyone.</span><button class="send" type="submit">↑</button></div></form><p class="footnote">No password or sign-up. Your username is only a display name.</p></div></main></div><div class="modal" id="nameModal"><form class="card" id="nameForm"><div class="logo">◉</div><h2>Choose a username</h2><p>This name will appear beside the messages you send.</p><input id="username" maxlength="30" autocomplete="nickname" placeholder="Enter a username" required><button type="submit">Enter public chat</button></form></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+
+  <title>OpenChat</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+
+  <aside class="sidebar">
+
+    <div class="brand">
+
+      <div class="brand-logo">
+        💬
+      </div>
+
+      <div>
+        <h2>
+          Open<span>Chat</span>
+        </h2>
+
+        <small>
+          No account needed
+        </small>
+      </div>
+
+    </div>
+
+
+    <button class="new-chat">
+      <span>＋</span>
+      New chat
+    </button>
+
+
+    <div class="search-box">
+
+      <span>⌕</span>
+
+      <input
+        type="text"
+        placeholder="Search chats..."
+        disabled
+      >
+
+    </div>
+
+
+    <nav class="nav">
+
+      <button class="nav-item active">
+
+        <span class="nav-icon">
+          ♧
+        </span>
+
+        <span>
+          <strong>
+            Public chat
+          </strong>
+
+          <small>
+            Everyone can chat
+          </small>
+        </span>
+
+        <span class="arrow">
+          ›
+        </span>
+
+      </button>
+
+    </nav>
+
+
+    <div class="spacer"></div>
+
+
+    <!-- PROFILE -->
+
+    <div class="profile">
+
+      <div class="avatar-wrap">
+
+        <div
+          class="avatar"
+          id="sideAvatar"
+        >
+          ?
+        </div>
+
+        <i></i>
+
+      </div>
+
+
+      <div class="profile-info">
+
+        <strong id="sideName">
+          Guest
+        </strong>
+
+        <small>
+          No account needed
+        </small>
+
+      </div>
+
+
+      <button
+        id="changeName"
+        class="edit-profile"
+        type="button"
+        title="Change name"
+      >
+        ✎
+      </button>
+
+    </div>
+
+  </aside>
+
+
+
+  <!-- MAIN CHAT -->
+
+  <main class="chat-panel">
+
+
+    <!-- HEADER -->
+
+    <header class="topbar">
+
+      <div class="chat-info">
+
+        <div class="chat-avatar">
+          ♧
+        </div>
+
+
+        <div>
+
+          <h1>
+            Public chat
+          </h1>
+
+          <p>
+            <span class="online-dot"></span>
+            Public room
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="top-actions">
+
+        <button
+          id="notifyBtn"
+          class="notification-btn"
+          type="button"
+        >
+          🔔 Enable notifications
+        </button>
+
+        <button
+          class="more-btn"
+          type="button"
+          title="More"
+        >
+          •••
+        </button>
+
+      </div>
+
+    </header>
+
+
+
+    <!-- MESSAGES -->
+
+    <section
+      id="messages"
+      class="messages"
+      aria-live="polite"
+    ></section>
+
+
+
+    <!-- COMPOSER -->
+
+    <div class="composer-area">
+
+      <form
+        id="form"
+        class="composer"
+      >
+
+        <div class="composer-icon">
+          ＋
+        </div>
+
+
+        <textarea
+          id="message"
+          maxlength="1000"
+          rows="1"
+          placeholder="Type a message..."
+          required
+        ></textarea>
+
+
+        <button
+          class="emoji-btn"
+          type="button"
+          tabindex="-1"
+        >
+          ☺
+        </button>
+
+
+        <button
+          class="send"
+          type="submit"
+          aria-label="Send message"
+        >
+          ➤
+        </button>
+
+      </form>
+
+
+      <div class="composer-meta">
+
+        <span id="status">
+          Messages are saved for everyone.
+        </span>
+
+        <span>
+          No password or sign-up
+        </span>
+
+      </div>
+
+    </div>
+
+  </main>
+
+</div>
+
+
+
+<!-- USERNAME MODAL -->
+
+<div
+  class="modal"
+  id="nameModal"
+>
+
+  <form
+    class="card"
+    id="nameForm"
+  >
+
+    <div class="modal-logo">
+      💬
+    </div>
+
+
+    <h2>
+      Welcome to OpenChat
+    </h2>
+
+
+    <p>
+      Choose a display name to enter the public chat.
+      No password or account is required.
+    </p>
+
+
+    <input
+      id="username"
+      maxlength="30"
+      autocomplete="nickname"
+      placeholder="Enter a username"
+      required
+    >
+
+
+    <button type="submit">
+      Enter public chat
+    </button>
+
+  </form>
+
+</div>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="app.js"></script>
+
+</body>
+</html>
