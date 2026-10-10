@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#171c22">
+  <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
+  <title>OpenChat — Personal Messenger</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <section class="auth-page" id="authPage">
+    <div class="auth-card">
+      <div class="auth-logo" aria-hidden="true">💬</div>
+      <h1>Open<span>Chat</span></h1>
+      <p class="muted">Your personal messenger. Sign in securely with your Google account.</p>
+      <button class="google-button" id="googleLogin" type="button">
+        <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.9-.4-4.2H24v7.9h11c-.5 2.5-1.9 4.6-4.1 6.1v5.1h6.6c3.9-3.6 6.1-8.8 6.1-14.9Z"/><path fill="#34A853" d="M24 44c5.5 0 10.2-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.5-8.5H5.7v5.3C9 38.8 15.9 44 24 44Z"/><path fill="#FBBC05" d="M12.5 25.4a12.5 12.5 0 0 1 0-8V12H5.7a20 20 0 0 0 0 24l6.8-5.3c-.5-1.5-.7-3.2-.7-5.3Z"/><path fill="#EA4335" d="M24 12.1c3 0 5.6 1 7.7 3l5.8-5.8C33.9 5.9 29.3 4 24 4 15.9 4 9 9.2 5.7 16.4l6.8 5.3C14.2 15.7 18.7 12.1 24 12.1Z"/></svg>
+        Continue with Google
+      </button>
+      <p class="auth-feedback" id="authFeedback" role="status" aria-live="polite"></p>
+      <p class="footnote">No password to create or remember. Only your chat participants can read messages.</p>
+    </div>
+  </section>
+
+  <div class="app-shell hidden" id="appShell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-logo" aria-hidden="true">💬</div><div><h2>Open<span>Chat</span></h2><small>Personal messenger</small></div></div>
+      <button id="newChatBtn" class="new-chat" type="button">＋ New personal chat</button>
+      <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" autocomplete="off" placeholder="Search people or chats…" aria-label="Search people or chats"></div>
+      <div class="sidebar-heading"><strong id="listTitle">Your conversations</strong><button id="allChatsBtn" class="text-button hidden" type="button">Back to chats</button></div>
+      <nav class="conversation-list" id="conversationList" aria-label="Conversations"></nav>
+      <p class="empty-list" id="emptyList">No chats yet. Tap “New personal chat” to start.</p>
+      <div class="spacer"></div>
+      <div class="profile"><div class="avatar" id="sideAvatar">?</div><div class="profile-info"><strong id="sideName">Signed in</strong><small id="sideHandle"></small></div><button id="logoutBtn" class="logout" title="Sign out" type="button" aria-label="Sign out">↪</button></div>
+    </aside>
+
+    <main class="chat-panel">
+      <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Select a conversation, or find another user to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
+      <div class="chat-view hidden" id="chatView">
+        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p>Private one-to-one chat</p></div></header>
+        <section class="messages" id="messages" aria-live="polite"></section>
+        <div class="composer-area"><form class="composer" id="messageForm"><textarea id="messageInput" rows="1" maxlength="1000" placeholder="Write a personal message…" required></textarea><button class="send" id="sendBtn" type="submit" aria-label="Send message">➤</button></form><p class="status" id="status" role="status" aria-live="polite"></p></div>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
