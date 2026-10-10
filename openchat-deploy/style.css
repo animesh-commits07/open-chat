@@ -37,3 +37,16 @@
 .notify-status{flex-shrink:0;min-height:0;margin:0 5px 10px;color:var(--muted);font-size:11px;line-height:1.3}
 .notify-status:empty{display:none}
 @media(max-width:700px){.notify-toggle{min-height:50px}.notify-status{font-size:11px}}
+
+/* Dismissible, per-account notification reminder. Never steals keyboard focus. */
+.notification-prompt{position:fixed;z-index:25;right:18px;bottom:max(18px,env(safe-area-inset-bottom));width:min(420px,calc(100vw - 32px));display:flex;align-items:flex-start;gap:13px;padding:17px;background:linear-gradient(140deg,#303a46,#202a34);border:1px solid rgba(46,232,143,.42);border-radius:21px;box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--text)}
+.notification-prompt-icon{font-size:28px;line-height:1.2;flex-shrink:0}
+.notification-prompt-content{min-width:0;flex:1}
+.notification-prompt-content strong{display:block;font-size:15px;margin-bottom:6px}
+.notification-prompt-content p{margin:0;color:#bdcad2;font-size:13px;line-height:1.45}
+.notification-prompt-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.notification-prompt-actions button{min-height:40px;padding:10px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.15);font-size:12px;font-weight:700}
+.notification-prompt-enable{background:linear-gradient(145deg,#35eca0,#18b975);color:#0d291b;border:0!important}
+.notification-prompt-dismiss{background:#2b3640;color:var(--text)}
+.notification-prompt-actions button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media(max-width:700px){.notification-prompt{top:max(12px,env(safe-area-inset-top));bottom:auto;left:12px;right:12px;width:auto;padding:15px;gap:10px;border-radius:17px}.notification-prompt-content strong{font-size:14px}.notification-prompt-actions button{min-height:44px}}
