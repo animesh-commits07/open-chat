@@ -149,8 +149,8 @@ function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className
 function pair(a,b){return [a,b].sort().join('_')}
 $('googleLogin').onclick=async()=>{
   feedback('Opening Google sign-in…');
-  const persistent=await persistenceReady;
-  if(!persistent)feedback('This browser could not save a persistent login. Check Chrome site data settings if you are signed out after closing it.');
+  // Open Google's popup directly from the click; Firebase waits for pending persistence changes.
+  // Awaiting IndexedDB/storage first can cause mobile browsers to block the popup.
   try{await signInWithPopup(auth,provider)}
   catch(e){
     if(e.code==='auth/popup-blocked'){
