@@ -44,15 +44,16 @@
       <div class="brand"><div class="brand-logo" aria-hidden="true">💬</div><div><h2>Open<span>Chat</span></h2><small>Personal messenger</small></div></div>
       <button id="newChatBtn" class="new-chat" type="button">＋ New personal chat</button>
       <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" autocomplete="off" placeholder="Search @username…" aria-label="Search people or chats"></div>
-      <div class="sidebar-heading"><strong id="listTitle">Your conversations</strong><button id="allChatsBtn" class="text-button hidden" type="button">Back to chats</button></div>
+      <div class="directory-tabs" role="group" aria-label="People or conversations"><button id="peopleTab" class="directory-tab active" aria-pressed="true" type="button">👥 People</button><button id="chatsTab" class="directory-tab" aria-pressed="false" type="button">💬 Chats</button></div>
+      <div class="sidebar-heading"><strong id="listTitle">All registered users</strong><button id="allChatsBtn" class="text-button hidden" type="button">Back to chats</button></div>
       <nav class="conversation-list" id="conversationList" aria-label="Conversations"></nav>
-      <p class="empty-list" id="emptyList">No chats yet. Tap “New personal chat” to start.</p>
+      <p class="empty-list" id="emptyList">Registered users will appear here when you sign in.</p>
       <div class="spacer"></div>
       <div class="profile"><div class="avatar" id="sideAvatar">?</div><div class="profile-info"><strong id="sideName">Signed in</strong><small id="sideHandle"></small></div><button id="logoutBtn" class="logout" title="Sign out" type="button" aria-label="Sign out">↪</button></div>
     </aside>
 
     <main class="chat-panel">
-      <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Select a conversation, or search an @username to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
+      <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Pick anyone from the People list, or search their @username to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
       <div class="chat-view hidden" id="chatView">
         <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p>Private one-to-one chat</p></div></header>
         <section class="messages" id="messages" aria-live="polite"></section>
