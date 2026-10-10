@@ -1,8 +1,14 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
-import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {getFirestore,doc,setDoc,getDoc,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
+// Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
+// Never save Firebase credentials or ID tokens manually in localStorage.
+const persistenceReady=setPersistence(auth,browserLocalPersistence).then(()=>true).catch(error=>{
+  console.warn('Persistent authentication storage is unavailable:',error);
+  return false;
+});
 const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=null,stopThreads=null,users=new Map(),threads=[];let view='people',directoryCursor=null,directoryTerm='',directoryLoading=false,directoryFinished=false,directoryCount=0,peopleVersion=0,threadVersion=0;
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
@@ -141,10 +147,23 @@ const status=t=>$('status').textContent=t;const feedback=t=>$('authFeedback').te
 function clean(s){return String(s||'').trim()};function initials(s){return clean(s).slice(0,1).toUpperCase()||'?'};
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
 function pair(a,b){return [a,b].sort().join('_')}
-$('googleLogin').onclick=async()=>{feedback('Opening Google sign-in…');try{await signInWithPopup(auth,provider)}catch(e){if(e.code==='auth/popup-blocked'){try{await signInWithRedirect(auth,provider);return}catch(x){feedback(x.message);return}}feedback(e.message)}};
-getRedirectResult(auth).catch(e=>feedback(e.message));
+$('googleLogin').onclick=async()=>{
+  feedback('Opening Google sign-in…');
+  const persistent=await persistenceReady;
+  if(!persistent)feedback('This browser could not save a persistent login. Check Chrome site data settings if you are signed out after closing it.');
+  try{await signInWithPopup(auth,provider)}
+  catch(e){
+    if(e.code==='auth/popup-blocked'){
+      try{await signInWithRedirect(auth,provider);return}
+      catch(x){feedback(x.message);return}
+    }
+    feedback(e.message);
+  }
+};
+void persistenceReady.then(()=>getRedirectResult(auth)).catch(e=>feedback(e.message));
 $('logoutBtn').onclick=signOutWithPushCleanup;
 async function enterApp(){
+  $('sessionLoading').classList.add('hidden');
   $('sideName').textContent='@'+myUsername;
   $('sideHandle').textContent='Your private username';
   $('sideAvatar').textContent=initials(myUsername);
@@ -157,23 +176,31 @@ $('usernameLogout').onclick=signOutWithPushCleanup;
 $('usernameField').oninput=()=>{$('usernameField').value=normalize($('usernameField').value);$('usernameFeedback').textContent=''};
 onAuthStateChanged(auth,async u=>{
   const version=++authVersion;
+  await persistenceReady;
+  if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
   $('notificationPrompt').classList.add('hidden');
+  $('sessionLoading').classList.remove('hidden');
   $('appShell').classList.add('hidden');$('appShell').classList.remove('chat-open');
   $('chatView').classList.add('hidden');$('chatWelcome').classList.remove('hidden');
-  if(!u){$('usernamePage').classList.add('hidden');$('authPage').classList.remove('hidden');return}
-  $('authPage').classList.add('hidden');$('usernamePage').classList.remove('hidden');
+  if(!u){$('usernamePage').classList.add('hidden');$('sessionLoading').classList.add('hidden');$('authPage').classList.remove('hidden');return}
+  $('authPage').classList.add('hidden');$('usernamePage').classList.add('hidden');
   $('usernameForm').classList.add('hidden');$('usernameFeedback').textContent='Checking your account…';
   try{
     const profile=await getDoc(doc(db,'users',u.uid));if(version!==authVersion)return;
     const username=profile.exists()?profile.data().username:null;
     if(validUsername(username)){myUsername=username;users.set(u.uid,{uid:u.uid,username});enterApp();return}
+    $('sessionLoading').classList.add('hidden');$('usernamePage').classList.remove('hidden');
     $('usernameForm').classList.remove('hidden');$('usernameFeedback').textContent='';
     const suggestion=normalize((u.email||'').split('@')[0]).replace(/[^a-z0-9_]/g,'').slice(0,20);
     $('usernameField').value=validUsername(suggestion)?suggestion:'';$('usernameField').focus();
-  }catch(e){if(version===authVersion)$('usernameFeedback').textContent='Could not load account: '+e.message}
+  }catch(e){if(version===authVersion){$('sessionLoading').classList.add('hidden');$('usernamePage').classList.remove('hidden');$('usernameFeedback').textContent='Could not load account: '+e.message}}
+},error=>{
+  $('sessionLoading').classList.add('hidden');
+  $('authPage').classList.remove('hidden');
+  feedback('Could not restore your Google session: '+error.message);
 });
 $('usernameForm').onsubmit=async e=>{
   e.preventDefault();if(!me)return;const uid=me.uid,handle=normalize($('usernameField').value);
