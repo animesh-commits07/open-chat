@@ -23,11 +23,27 @@
     </div>
   </section>
 
+  <section class="auth-page hidden" id="usernamePage">
+    <div class="auth-card">
+      <div class="auth-logo" aria-hidden="true">＠</div>
+      <h1>Choose a <span>username</span></h1>
+      <p class="muted">You are signed in with Google. Choose a unique username so others can find you without knowing your email address.</p>
+      <form id="usernameForm" autocomplete="off">
+        <label for="usernameField">Your username</label>
+        <div class="username-input-wrap"><span aria-hidden="true">@</span><input id="usernameField" maxlength="20" minlength="3" type="text" pattern="[a-z][a-z0-9_]{2,19}" placeholder="happy_chat_7" autocapitalize="none" spellcheck="false" autocomplete="off" required></div>
+        <p class="username-hint">3–20 characters: lowercase letters, numbers and underscores. Start with a letter. Your username cannot be changed later.</p>
+        <button class="primary" id="saveUsername" type="submit">Save username &amp; continue</button>
+      </form>
+      <p id="usernameFeedback" class="auth-feedback" role="status" aria-live="polite"></p>
+      <button id="usernameLogout" class="text-button" type="button">Use a different Google account</button>
+    </div>
+  </section>
+
   <div class="app-shell hidden" id="appShell">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><div class="brand-logo" aria-hidden="true">💬</div><div><h2>Open<span>Chat</span></h2><small>Personal messenger</small></div></div>
       <button id="newChatBtn" class="new-chat" type="button">＋ New personal chat</button>
-      <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" autocomplete="off" placeholder="Search people or chats…" aria-label="Search people or chats"></div>
+      <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" autocomplete="off" placeholder="Search @username…" aria-label="Search people or chats"></div>
       <div class="sidebar-heading"><strong id="listTitle">Your conversations</strong><button id="allChatsBtn" class="text-button hidden" type="button">Back to chats</button></div>
       <nav class="conversation-list" id="conversationList" aria-label="Conversations"></nav>
       <p class="empty-list" id="emptyList">No chats yet. Tap “New personal chat” to start.</p>
@@ -36,7 +52,7 @@
     </aside>
 
     <main class="chat-panel">
-      <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Select a conversation, or find another user to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
+      <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Select a conversation, or search an @username to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
       <div class="chat-view hidden" id="chatView">
         <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p>Private one-to-one chat</p></div></header>
         <section class="messages" id="messages" aria-live="polite"></section>
