@@ -20,3 +20,13 @@
 #usernameForm>.primary{width:100%;margin-top:6px}
 #usernameLogout{width:100%;margin:12px 0 0;padding:10px 0}
 @media(max-width:700px){.auth-card{padding:27px 22px}.auth-page{padding:16px}}
+
+.directory-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 0;padding:5px;border-radius:17px;background:#171e25;box-shadow:inset 3px 3px 8px #10161b,inset -3px -3px 8px #2a343e}
+.directory-tab{border:0;border-radius:12px;min-height:44px;padding:8px 12px;font-weight:700;font-size:14px;background:transparent;color:var(--muted);transition:background .15s,color .15s}
+.directory-tab.active{background:linear-gradient(145deg,#2c3940,#233039);color:var(--green);box-shadow:3px 3px 8px #10161b}
+.directory-tab:focus-visible,.conversation:focus-visible,.load-more-people:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.load-more-people{width:100%;flex-shrink:0;margin:8px 0 15px;padding:14px;border-radius:14px;border:1px solid #2ee88f55;color:var(--green);background:#253039;font-weight:700}
+.conversation-list{scrollbar-width:thin;overscroll-behavior:contain}
+@media(max-width:700px){.sidebar{height:100dvh;min-height:0}.conversation-list{padding-bottom:10px}.profile{flex-shrink:0}.directory-tab{min-height:48px}.search-box{flex-shrink:0}}
+
+.sidebar .spacer{display:none}
