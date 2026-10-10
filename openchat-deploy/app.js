@@ -8,6 +8,8 @@ const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=nul
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
 const VAPID_PUBLIC_KEY='BOxyo7vxirvYAzJRedbprbSMgoVCYD389WzJ6RAFXtjOzVj0gPJL1NZu8UwZRMC5MKAcszcN4IdcvFV4cZEnR3s';
 const PUSH_OPT_IN_KEY='openchat_private_push_opt_in';
+const PUSH_REMINDER_KEY_PREFIX='openchat_push_reminder_after_';
+const PUSH_REMINDER_SNOOZE_MS=7*24*60*60*1000;
 let pushBusy=false;
 function pushSupported(){return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && window.isSecureContext}
 function publicVapidBytes(str){
@@ -15,10 +17,54 @@ function publicVapidBytes(str){
   return Uint8Array.from(atob((str+pad).replace(/-/g,'+').replace(/_/g,'/')),x=>x.charCodeAt(0));
 }
 function pushStatus(message=''){$('notifyStatus').textContent=message}
+function reminderKey(user){return PUSH_REMINDER_KEY_PREFIX+user.uid}
+function refreshNotificationReminder(){
+  const prompt=$('notificationPrompt');
+  if(!me || $('appShell').classList.contains('hidden')){prompt.classList.add('hidden');return}
+  const permission=('Notification' in window)?Notification.permission:'unsupported';
+  const enabled=pushSupported() && permission==='granted' && localStorage.getItem(PUSH_OPT_IN_KEY)==='yes';
+  if(enabled || Date.now()<Number(localStorage.getItem(reminderKey(me))||0)){
+    prompt.classList.add('hidden');return;
+  }
+  const title=$('notificationPromptTitle'), message=$('notificationPromptText'), action=$('notificationPromptEnable');
+  title.textContent='Stay updated with private messages';
+  if(!pushSupported()){
+    message.textContent='On iPhone, add OpenChat to your Home Screen using Safari to enable web push. Other browsers need notification support and HTTPS.';
+    action.textContent='Got it';
+  }else if(permission==='denied'){
+    message.textContent='Notifications are blocked. Allow them for OpenChat in your phone or browser site settings, then come back.';
+    action.textContent='How to allow';
+  }else if(permission==='granted'){
+    message.textContent='Your browser allows notifications. Turn on private message alerts for this Google account and device.';
+    action.textContent='Turn on alerts';
+  }else{
+    message.textContent='Get a notification when someone sends you a private message. Your own sent messages will not notify you.';
+    action.textContent='Enable notifications';
+  }
+  prompt.classList.remove('hidden');
+}
+$('notificationPromptDismiss').onclick=()=>{
+  if(me)localStorage.setItem(reminderKey(me),String(Date.now()+PUSH_REMINDER_SNOOZE_MS));
+  $('notificationPrompt').classList.add('hidden');
+};
+$('notificationPromptEnable').onclick=()=>{
+  if(!me)return;
+  if(!pushSupported()){
+    $('notificationPromptText').textContent='To use notifications on iPhone: open OpenChat in Safari, tap Share → Add to Home Screen, open that icon, and allow notifications there.';
+    return;
+  }
+  if(Notification.permission==='denied'){
+    $('notificationPromptText').textContent='Open your browser site settings for OpenChat, change Notifications to Allow, and return to the app.';
+    return;
+  }
+  $('notifyBtn').click();
+};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNotificationReminder()});
 function updatePushButton(){
   const yes=localStorage.getItem(PUSH_OPT_IN_KEY)==='yes' && ('Notification' in window)&&Notification.permission==='granted';
   $('notifyBtn').textContent=yes?'🔔 Notifications on — turn off':'🔔 Enable notifications';
   $('notifyBtn').setAttribute('aria-pressed',String(yes));
+  refreshNotificationReminder();
 }
 async function pushRequest(route,data,user){
   const token=await user.getIdToken();
@@ -114,6 +160,7 @@ onAuthStateChanged(auth,async u=>{
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
+  $('notificationPrompt').classList.add('hidden');
   $('appShell').classList.add('hidden');$('appShell').classList.remove('chat-open');
   $('chatView').classList.add('hidden');$('chatWelcome').classList.remove('hidden');
   if(!u){$('usernamePage').classList.add('hidden');$('authPage').classList.remove('hidden');return}
