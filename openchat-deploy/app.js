@@ -439,7 +439,7 @@ async function loadMessages(){
       )
       .order(
         "created_at",
-        {ascending:true}
+        {ascending:false}
       )
       .limit(300);
 
@@ -454,8 +454,9 @@ async function loadMessages(){
 
 
   messages.innerHTML=
-    (data||[])
-      .map(m=>{
+   (data||[])
+  .reverse()
+  .map(m=>{
 
         const own=
           ownIds.has(m.id);
