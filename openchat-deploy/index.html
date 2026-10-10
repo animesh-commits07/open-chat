@@ -9,7 +9,16 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <section class="auth-page" id="authPage">
+  <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
+    <div class="auth-card">
+      <div class="auth-logo" aria-hidden="true">💬</div>
+      <h1>Open<span>Chat</span></h1>
+      <p class="muted">Restoring your Google session…</p>
+      <p class="footnote">You won't need to log in again unless you sign out or clear browser data.</p>
+    </div>
+  </section>
+
+  <section class="auth-page hidden" id="authPage">
     <div class="auth-card">
       <div class="auth-logo" aria-hidden="true">💬</div>
       <h1>Open<span>Chat</span></h1>
