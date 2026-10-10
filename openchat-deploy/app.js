@@ -130,8 +130,8 @@ async function loadMorePeople(version=peopleVersion){
   $('emptyList').textContent=directoryCount?'Loading more users…':'Loading people…';
   try{
     const terms=[orderBy(documentId())];
-    if(directoryTerm)terms.push(startAt(directoryTerm));
     if(directoryCursor)terms.push(startAfter(directoryCursor));
+    else if(directoryTerm)terms.push(startAt(directoryTerm));
     if(directoryTerm)terms.push(endAt(directoryTerm+'\uf8ff'));
     terms.push(limit(DIRECTORY_PAGE_SIZE));
     const snap=await getDocs(query(collection(db,'handles'),...terms));
