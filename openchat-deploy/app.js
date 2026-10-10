@@ -1,9 +1,9 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,setDoc,getDoc,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,setDoc,getDoc,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
-const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=null,stopThreads=null,users=new Map(),threads=[];
+const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=null,stopThreads=null,users=new Map(),threads=[];let view='people',directoryCursor=null,directoryTerm='',directoryLoading=false,directoryFinished=false,directoryCount=0,peopleVersion=0,threadVersion=0;
 const validUsername=u=>typeof u==='string'&&/^[a-z][a-z0-9_]{2,19}$/.test(u);let myUsername='',authVersion=0,searchVersion=0;const normalize=u=>String(u||'').trim().replace(/^@/,'').toLowerCase();
 const status=t=>$('status').textContent=t;const feedback=t=>$('authFeedback').textContent=t;
 function clean(s){return String(s||'').trim()};function initials(s){return clean(s).slice(0,1).toUpperCase()||'?'};
@@ -18,7 +18,7 @@ async function enterApp(){
   $('sideAvatar').textContent=initials(myUsername);
   $('searchInput').value='';
   $('authPage').classList.add('hidden');$('usernamePage').classList.add('hidden');$('appShell').classList.remove('hidden');
-  watchThreads();
+  view='people';showPeople('');watchThreads();
 }
 $('usernameLogout').onclick=()=>signOut(auth);
 $('usernameField').oninput=()=>{$('usernameField').value=normalize($('usernameField').value);$('usernameFeedback').textContent=''};
@@ -26,7 +26,7 @@ onAuthStateChanged(auth,async u=>{
   const version=++authVersion;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
-  ++searchVersion;users.clear();active=null;threads=[];me=u;myUsername='';
+  ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
   $('appShell').classList.add('hidden');$('appShell').classList.remove('chat-open');
   $('chatView').classList.add('hidden');$('chatWelcome').classList.remove('hidden');
   if(!u){$('usernamePage').classList.add('hidden');$('authPage').classList.remove('hidden');return}
@@ -60,26 +60,125 @@ $('usernameForm').onsubmit=async e=>{
   }catch(err){$('usernameFeedback').textContent='Could not save username: '+err.message}
   finally{button.disabled=false}
 };
-function watchThreads(){stopThreads=onSnapshot(query(collection(db,'threads'),where('members','array-contains',me.uid)),snap=>{threads=snap.docs.map(d=>({id:d.id,...d.data()}));if(!$('searchInput').value.trim())renderThreads()},e=>status('Could not load chats: '+e.message))}
-function makePersonButton(u,click,preview='Start private chat'){const b=el('button','conversation');b.type='button';const a=el('div','avatar',initials(u.username));const body=el('div','conversation-body');body.append(el('strong',null,'@'+(u.username||'user')),el('small',null,preview));b.append(a,body);b.onclick=click;return b}
-async function getUser(uid){if(users.has(uid))return users.get(uid);const snap=await getDoc(doc(db,'users',uid));const u=snap.exists()?{uid,username:snap.data().username||'user'}:{uid,username:'user'};users.set(uid,u);return u}
-async function renderThreads(){const nav=$('conversationList');nav.replaceChildren();$('listTitle').textContent='Your conversations';$('allChatsBtn').classList.add('hidden');$('emptyList').textContent='No chats yet. Tap “New personal chat” to start.';$('emptyList').classList.toggle('hidden',threads.length>0);for(const t of threads){const other=t.members.find(id=>id!==me.uid);if(!other)continue;const u=await getUser(other);nav.append(makePersonButton(u,()=>openChat(t.id,u),'Private conversation'))}}
-async function searchPeople(term){
-  const version=++searchVersion,nav=$('conversationList');nav.replaceChildren();
-  $('listTitle').textContent='Find people';$('allChatsBtn').classList.remove('hidden');$('emptyList').classList.add('hidden');
-  const prefix=normalize(term);
-  if(!prefix){nav.append(el('p','empty-list','Type an @username to find another user.'));return}
-  if(!/^[a-z][a-z0-9_]{0,19}$/.test(prefix)){nav.append(el('p','empty-list','Use letters, numbers and underscores.'));return}
-  try{
-    const snap=await getDocs(query(collection(db,'handles'),orderBy(documentId()),startAt(prefix),endAt(prefix+'\uf8ff'),limit(25)));
-    const matches=snap.docs.filter(d=>d.data().uid!==me?.uid);
-    const found=await Promise.all(matches.map(async d=>{const u=await getUser(d.data().uid);return {...u,username:d.id}}));
-    if(version!==searchVersion||!me)return;
-    if(!found.length)nav.append(el('p','empty-list','No matching username found.'));
-    for(const u of found)nav.append(makePersonButton(u,()=>startChat(u),'Tap to start a private chat'));
-  }catch(e){if(version===searchVersion)nav.append(el('p','empty-list','Search failed: '+e.message))}
+function setView(next){
+  view=next;
+  $('peopleTab').classList.toggle('active',next==='people');
+  $('chatsTab').classList.toggle('active',next==='chats');
+  $('peopleTab').setAttribute('aria-pressed',String(next==='people'));
+  $('chatsTab').setAttribute('aria-pressed',String(next==='chats'));
+  $('allChatsBtn').classList.add('hidden');
 }
-$('newChatBtn').onclick=$('mobileNewChat').onclick=()=>{$('searchInput').value='';searchPeople('');$('searchInput').focus()};$('allChatsBtn').onclick=()=>{$('searchInput').value='';renderThreads()};let searchTimer;$('searchInput').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{$('searchInput').value.trim()?searchPeople($('searchInput').value):renderThreads()},250)};
+function watchThreads(){
+  stopThreads=onSnapshot(query(collection(db,'threads'),where('members','array-contains',me.uid)),snap=>{
+    threads=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(view==='chats')renderThreads();
+  },e=>{if(view==='chats')$('emptyList').textContent='Could not load chats: '+e.message;});
+}
+function makePersonButton(u,click,preview='Tap to start private chat'){
+  const b=el('button','conversation');b.type='button';
+  const a=el('div','avatar',initials(u.username));
+  const body=el('div','conversation-body');
+  body.append(el('strong',null,'@'+(u.username||'user')),el('small',null,preview));
+  b.append(a,body);b.onclick=click;return b;
+}
+async function getUser(uid){
+  if(users.has(uid))return users.get(uid);
+  const snap=await getDoc(doc(db,'users',uid));
+  const u=snap.exists()?{uid,username:snap.data().username||'user'}:{uid,username:'user'};
+  users.set(uid,u);return u;
+}
+async function renderThreads(){
+  if(view!=='chats'||!me)return;
+  const version=++threadVersion,nav=$('conversationList');
+  $('listTitle').textContent='Your conversations';
+  nav.replaceChildren();
+  $('emptyList').textContent='No chats yet. Select People to start a private conversation.';
+  $('emptyList').classList.toggle('hidden',threads.length>0);
+  try{
+    const items=await Promise.all([...threads].sort((a,b)=>(b.updatedAt?.toMillis?.()||0)-(a.updatedAt?.toMillis?.()||0)).map(async t=>{
+      const other=t.members.find(id=>id!==me.uid);if(!other)return null;
+      const u=await getUser(other);return {t,u};
+    }));
+    if(view!=='chats'||version!==threadVersion||!me)return;
+    for(const item of items){if(item)nav.append(makePersonButton(item.u,()=>openChat(item.t.id,item.u),'Private conversation'));}
+  }catch(e){if(version===threadVersion)$('emptyList').textContent='Could not load conversations: '+e.message;}
+}
+const DIRECTORY_PAGE_SIZE=50;
+function showPeople(term=''){
+  if(!me)return;
+  setView('people');++threadVersion;
+  const normalized=normalize(term);
+  directoryTerm=normalized;
+  directoryCursor=null;directoryFinished=false;directoryLoading=false;directoryCount=0;
+  const current=++peopleVersion;
+  const nav=$('conversationList');nav.replaceChildren();nav.scrollTop=0;
+  $('listTitle').textContent=normalized?'Matching people':'All registered users';
+  $('emptyList').textContent='Loading people…';$('emptyList').classList.remove('hidden');
+  if(normalized && !/^[a-z][a-z0-9_]{0,19}$/.test(normalized)){
+    $('emptyList').textContent='Search using letters, numbers and underscores.';
+    directoryFinished=true;return;
+  }
+  loadMorePeople(current);
+}
+async function loadMorePeople(version=peopleVersion){
+  if(!me||view!=='people'||directoryLoading||directoryFinished||version!==peopleVersion)return;
+  directoryLoading=true;
+  const nav=$('conversationList');
+  let loadButton=nav.querySelector('.load-more-people');
+  if(loadButton)loadButton.remove();
+  $('emptyList').classList.remove('hidden');
+  $('emptyList').textContent=directoryCount?'Loading more users…':'Loading people…';
+  try{
+    const terms=[orderBy(documentId())];
+    if(directoryTerm)terms.push(startAt(directoryTerm));
+    if(directoryCursor)terms.push(startAfter(directoryCursor));
+    if(directoryTerm)terms.push(endAt(directoryTerm+'\uf8ff'));
+    terms.push(limit(DIRECTORY_PAGE_SIZE));
+    const snap=await getDocs(query(collection(db,'handles'),...terms));
+    if(version!==peopleVersion||view!=='people'||!me)return;
+    const docs=snap.docs;
+    if(docs.length)directoryCursor=docs[docs.length-1];
+    directoryFinished=docs.length<DIRECTORY_PAGE_SIZE;
+    for(const document of docs){
+      const uid=document.data().uid;
+      if(uid===me.uid)continue;
+      const u={uid,username:document.id};
+      users.set(uid,u);
+      nav.append(makePersonButton(u,()=>startChat(u)));
+      directoryCount++;
+    }
+    if(directoryCount===0){
+      $('emptyList').textContent=directoryTerm?'No matching username found.':'No other registered users yet. Share your @username with a friend!';
+      $('emptyList').classList.remove('hidden');
+    }else $('emptyList').classList.add('hidden');
+    if(!directoryFinished){
+      loadButton=el('button','load-more-people','Show more people');
+      loadButton.type='button';loadButton.onclick=()=>loadMorePeople();nav.append(loadButton);
+    }
+  }catch(e){
+    if(version===peopleVersion){
+      $('emptyList').textContent='Could not load people: '+e.message;
+      $('emptyList').classList.remove('hidden');
+    }
+  }finally{if(version===peopleVersion)directoryLoading=false;}
+}
+$('conversationList').addEventListener('scroll',()=>{
+  if(view!=='people'||directoryFinished||directoryLoading)return;
+  const n=$('conversationList');
+  if(n.scrollTop+n.clientHeight>=n.scrollHeight-160)loadMorePeople();
+});
+$('peopleTab').onclick=()=>{ $('searchInput').value='';showPeople(''); };
+$('chatsTab').onclick=()=>{ ++peopleVersion;directoryLoading=false;$('searchInput').value='';setView('chats');renderThreads(); };
+$('newChatBtn').onclick=$('mobileNewChat').onclick=()=>{ $('searchInput').value='';showPeople('');$('searchInput').focus(); };
+$('allChatsBtn').onclick=()=>{$('chatsTab').click();};
+let searchTimer;
+$('searchInput').oninput=()=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{
+    if(!$('searchInput').value.trim() && view==='chats')return renderThreads();
+    showPeople($('searchInput').value);
+  },250);
+};
 async function startChat(u){try{const id=pair(me.uid,u.uid);await setDoc(doc(db,'threads',id),{members:[me.uid,u.uid].sort(),updatedAt:serverTimestamp()},{merge:true});openChat(id,u)}catch(e){alert('Could not create chat: '+e.message)}}
 function openChat(id,u){if(stopMessages)stopMessages();active={id,other:u};$('chatWelcome').classList.add('hidden');$('chatView').classList.remove('hidden');$('appShell').classList.add('chat-open');$('chatName').textContent='@'+(u.username||'user');$('chatAvatar').textContent=initials(u.username);$('messages').replaceChildren();status('Loading messages…');stopMessages=onSnapshot(query(collection(db,'threads',id,'messages'),orderBy('createdAt','desc'),limit(300)),snap=>{const container=$('messages');container.replaceChildren();const arr=snap.docs.slice().reverse();for(const item of arr){const m=item.data(),own=m.senderId===me.uid;const node=el('article','msg'+(own?' own':''));node.append(el('div','msg-body',m.text));const meta=el('div','msg-meta');const d=m.createdAt?.toDate?.();meta.append(el('span',null,d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));if(own){const del=el('button','delete-msg','🗑');del.title='Delete message';del.onclick=async()=>{if(confirm('Delete this message?'))try{await deleteDoc(doc(db,'threads',id,'messages',item.id))}catch(e){status(e.message)}};meta.append(del)}node.append(meta);container.append(node)}container.scrollTop=container.scrollHeight;status('Private chat • latest 300 messages')},e=>status('Could not load messages: '+e.message))}
 $('backToChats').onclick=()=>{$('appShell').classList.remove('chat-open')};
