@@ -10,3 +10,13 @@
 .conversation .conversation-body{flex:1}
 .conversation .avatar{width:44px;height:44px}
 @media(max-width:700px){.sidebar{padding-bottom:env(safe-area-inset-bottom)}.chat-panel{padding-bottom:env(safe-area-inset-bottom)}}
+
+.username-input-wrap{display:flex;align-items:center;gap:9px;margin:12px 0 8px;border-radius:15px;background:#1c232b;padding:0 14px;box-shadow:inset 4px 4px 9px #12171c,inset -3px -3px 8px #2b353f}
+.username-input-wrap span{font-size:19px;color:var(--green);font-weight:700}
+.auth-card .username-input-wrap input{width:100%;min-width:0;background:none;box-shadow:none;margin:0;padding:16px 0;border-radius:0}
+.username-input-wrap:focus-within{outline:2px solid rgba(46,232,143,.5)}
+.auth-card .username-input-wrap input:focus{outline:none}
+.username-hint{font-size:12px!important;margin:3px 0 14px;color:var(--muted)}
+#usernameForm>.primary{width:100%;margin-top:6px}
+#usernameLogout{width:100%;margin:12px 0 0;padding:10px 0}
+@media(max-width:700px){.auth-card{padding:27px 22px}.auth-page{padding:16px}}
