@@ -151,3 +151,16 @@
 .chat-info .chat-presence.is-error{color:#f2c28b;font-weight:500}
 @media(max-width:700px){.chat-typing-bubble{margin:0 12px 7px}}
 @media(prefers-reduced-motion:reduce){.typing-dots span{animation:none}}
+
+/* Opt-in in-chat diagnosis; no ongoing polling or extra Cloudflare calls. */
+.chat-info{flex:1;min-width:0}
+.typing-check-toggle{flex:none;align-self:center;min-height:36px;padding:7px 10px;border:1px solid rgba(46,232,143,.35);border-radius:10px;background:#2a3740;color:#bbfbd8;font-size:12px;font-weight:700;white-space:nowrap}
+.typing-check-toggle:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.typing-diagnostics{flex:none;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:7px;padding:12px 18px;border-bottom:1px solid rgba(46,232,143,.22);background:#1b2832}
+.typing-diagnostics strong{font-size:13px;color:#c2f6d8}
+.typing-diagnostics p{margin:0;color:#d4dce3;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.typing-diagnostic-actions{display:flex;gap:8px;flex-wrap:wrap}
+.typing-diagnostic-actions button{min-height:40px;padding:8px 12px;border:1px solid rgba(46,232,143,.28);border-radius:11px;background:#304039;font-size:12px;font-weight:700;color:#c4f6d9}
+.typing-diagnostic-actions button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.typing-diagnostics small{color:var(--muted);font-size:11px;line-height:1.35}
+@media(max-width:700px){.typing-check-toggle{padding:8px 9px;font-size:11px;min-height:36px}.typing-diagnostics{max-height:230px;padding:11px 12px}}
