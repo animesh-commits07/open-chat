@@ -180,6 +180,7 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  stopEditing(false);
   closeTypingSession();
   clearReceiptWatchers();
   clearReply();closeActions();
@@ -894,6 +895,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  stopEditing(false);
   closeTypingSession();
   clearReply();closeActions();
   active={id,other:u};
@@ -927,6 +929,7 @@ function openChat(id,u){
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
         meta.append(el('span',null,when?when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));
+        if(message.editedAt)meta.append(el('span','edited-mark','edited'));
         const replyButton=el('button','reply-trigger','↩');
         replyButton.type='button';
         replyButton.title='Reply to this message';
@@ -939,6 +942,14 @@ function openChat(id,u){
           const label={sending:'Sending',sent:'Sent',delivered:'Delivered',seen:'Seen'}[state];
           ticks.title=label;ticks.setAttribute('role','img');ticks.setAttribute('aria-label',label);
           meta.append(ticks);
+          if(canEditMessage(item,message)){
+            const editButton=el('button','edit-msg','✎');
+            editButton.type='button';
+            editButton.title='Edit message (15 minutes)';
+            editButton.setAttribute('aria-label','Edit message');
+            editButton.onclick=()=>startEdit(item,message,id);
+            meta.append(editButton);
+          }
           const del=el('button','delete-msg','🗑');
           del.title='Delete message';
           del.onclick=async()=>{
@@ -958,9 +969,10 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{stopEditing(false);closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
+  if(editDraft){await submitMessageEdit();return}
   if(!active||!me)return;
   const text=clean($('messageInput').value);
   if(!text)return;
