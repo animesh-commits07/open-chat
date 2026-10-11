@@ -180,6 +180,7 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  closeTypingSession();
   clearReceiptWatchers();
   clearReply();closeActions();
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
@@ -671,6 +672,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  closeTypingSession();
   clearReply();closeActions();
   active={id,other:u};
   $('chatWelcome').classList.add('hidden');
@@ -678,6 +680,7 @@ function openChat(id,u){
   $('appShell').classList.add('chat-open');
   $('chatName').textContent='@'+(u.username||'user');
   $('chatAvatar').textContent=initials(u.username);
+  watchOtherTyping(id,u.uid);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -733,7 +736,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(!active||!me)return;
@@ -742,6 +745,7 @@ $('messageForm').onsubmit=async event=>{
   const threadId=active.id,sender=me,chosen=replyDraft?.threadId===active.id?replyDraft:null;
   const payload={senderId:sender.uid,text,createdAt:serverTimestamp()};
   if(chosen)payload.replyTo={id:chosen.id,senderId:chosen.senderId,text:chosen.text};
+  stopOwnTyping();
   $('sendBtn').disabled=true;status('Sending…');
   try{
     const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
