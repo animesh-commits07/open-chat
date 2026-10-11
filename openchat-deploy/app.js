@@ -483,6 +483,42 @@ function jumpToOriginal(id){
   void target.offsetWidth;
   target.classList.add('reply-highlight');
 }
+
+function closeActions(){if(actionMenu){actionMenu.remove();actionMenu=null}}
+function showActions(item,message,node,threadId){
+  if(!me || active?.id!==threadId)return;
+  closeActions();
+  const menu=el('div','message-action-menu');
+  menu.setAttribute('role','group');menu.setAttribute('aria-label','Message actions');
+  const reply=el('button','primary-action','↩ Reply');
+  reply.type='button';reply.onclick=()=>startReply(item,message,threadId);
+  const copy=el('button',null,'Copy message');
+  copy.type='button';copy.onclick=async()=>{
+    closeActions();
+    try{await navigator.clipboard.writeText(message.text)}
+    catch(error){status('Copy unavailable: '+error.message)}
+  };
+  const cancel=el('button',null,'Cancel');
+  cancel.type='button';cancel.onclick=closeActions;
+  menu.append(reply,copy,cancel);
+  document.body.append(menu);actionMenu=menu;
+  if(window.innerWidth>700){
+    const rect=node.getBoundingClientRect();
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-190)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
+  }
+  reply.focus({preventScroll:true});
+}
+document.addEventListener('pointerdown',event=>{
+  if(actionMenu && !actionMenu.contains(event.target))closeActions();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){
+    if(actionMenu)closeActions();
+    else if(replyDraft)clearReply();
+  }
+});
+
 function createQuote(replyTo){
   if(!replyTo || typeof replyTo.id!=='string' || typeof replyTo.text!=='string')return null;
   const q=el('button','reply-quote');q.type='button';
