@@ -688,6 +688,86 @@ function clearReply(){
 }
 $('cancelReply').onclick=clearReply;
 function authorFor(uid){return uid===me?.uid?'You':'@'+(active?.other?.username||'User')}
+
+function canEditMessage(item,message){
+  const createdMs=message?.createdAt?.toMillis?.();
+  return !!me && message?.senderId===me.uid &&
+    !item?.metadata?.hasPendingWrites &&
+    typeof createdMs==='number' &&
+    createdMs<=Date.now() && Date.now()-createdMs<EDIT_WINDOW_MS;
+}
+function stopEditing(restore=true){
+  if(!editDraft)return;
+  const previous=editDraft;
+  editDraft=null;
+  $('editPreview').classList.add('hidden');
+  $('messageForm').classList.remove('editing-message');
+  $('sendBtn').textContent='➤';
+  $('sendBtn').setAttribute('aria-label','Send message');
+  $('messageInput').placeholder='Write a personal message…';
+  if(restore && active?.id===previous.threadId){
+    $('messageInput').value=previous.previousInput;
+    if(previous.previousReply){
+      replyDraft=previous.previousReply;
+      $('replyPreviewAuthor').textContent='Replying to '+authorFor(replyDraft.senderId);
+      $('replyPreviewText').textContent=replyDraft.text;
+      $('replyPreview').classList.remove('hidden');
+    }
+  }else if(!restore){
+    $('messageInput').value='';
+  }
+}
+$('cancelEdit').onclick=()=>stopEditing(true);
+function startEdit(item,message,threadId){
+  if(!me || active?.id!==threadId || message.senderId!==me.uid)return;
+  if(!canEditMessage(item,message)){
+    status('Messages can only be edited within 15 minutes of sending.');
+    closeActions();return;
+  }
+  if(editDraft)stopEditing(true);
+  const previousInput=$('messageInput').value;
+  const previousReply=replyDraft;
+  if(previousReply)clearReply();
+  editDraft={
+    threadId,id:item.id,originalText:message.text,
+    createdAtMs:message.createdAt.toMillis(),
+    previousInput,previousReply
+  };
+  stopOwnTyping();
+  $('messageInput').value=message.text;
+  $('messageInput').placeholder='Edit your message…';
+  $('editPreview').classList.remove('hidden');
+  $('messageForm').classList.add('editing-message');
+  $('sendBtn').textContent='✓';
+  $('sendBtn').setAttribute('aria-label','Save edited message');
+  closeActions();
+  $('messageInput').focus();
+}
+async function submitMessageEdit(){
+  const selected=editDraft;
+  if(!selected || !me || active?.id!==selected.threadId)return;
+  const text=clean($('messageInput').value);
+  if(!text){status('Edited message cannot be empty.');return}
+  if(text===selected.originalText){status('Change the message before saving.');return}
+  if(Date.now()-selected.createdAtMs>=EDIT_WINDOW_MS){
+    status('The 15-minute edit window has expired. Cancel to return to chat.');return;
+  }
+  $('sendBtn').disabled=true;
+  status('Saving edited message…');
+  try{
+    await updateDoc(doc(db,'threads',selected.threadId,'messages',selected.id),
+      {text,editedAt:serverTimestamp()});
+    if(editDraft===selected && active?.id===selected.threadId){
+      stopEditing(true);
+      status('Message edited');
+    }
+  }catch(error){
+    status('Could not edit message: '+error.message);
+  }finally{
+    $('sendBtn').disabled=false;
+  }
+}
+
 function startReply(item,message,threadId){
   if(!me || active?.id!==threadId)return;
   if(item.metadata?.hasPendingWrites){status('Wait for this message to send first.');return}
