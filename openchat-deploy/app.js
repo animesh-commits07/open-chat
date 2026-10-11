@@ -496,10 +496,19 @@ function closeTypingSession(){
   typingExpiryTimer=null;
   remoteTyping={active:false,updatedAt:0};
   typingReadError=false;typingWriteError=false;
+  typingDiagnosticOpen=false;
+  typingDiagnosticRead='Waiting for friend listener';
+  typingDiagnosticWrite='No signal sent yet';
+  typingDiagnosticLast='No signal observed yet';
+  if($('typingSendTest'))$('typingSendTest').disabled=false;
+  displayTypingDiagnostics();
   renderTypingPresence();
 }
 function watchOtherTyping(threadId,otherUid){
   remoteTyping={active:false,updatedAt:0};
+  typingDiagnosticRead='Connecting to Firestore…';
+  typingDiagnosticLast='No signal received yet';
+  displayTypingDiagnostics();
   renderTypingPresence();
   typingUnsubscribe=onSnapshot(
     doc(db,'threads',threadId,'typing',otherUid),
@@ -512,13 +521,20 @@ function watchOtherTyping(threadId,otherUid){
         updatedAt:data?.updatedAt?.toMillis?.()||0
       };
       typingReadError=false;
+      typingDiagnosticRead=snapshot.metadata.fromCache
+        ?'Local cache (waiting for server)'
+        :'Listener connected to Firestore ✓';
+      recordFriendTyping(data);
       renderTypingPresence();
       scheduleRemoteTypingExpiry();
     },
     error=>{
       console.warn('Could not watch typing status:',error);
       typingReadError=true;
+      typingDiagnosticRead='Listener FAILED: '+typingErrorCode(error);
+      typingDiagnosticLast='Not available';
       remoteTyping={active:false,updatedAt:0};
+      displayTypingDiagnostics();
       renderTypingPresence();
       scheduleRemoteTypingExpiry();
     }
