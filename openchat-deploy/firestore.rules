@@ -70,7 +70,30 @@ service cloud.firestore {
           request.resource.data.text is string &&
           request.resource.data.text.size() > 0 &&
           request.resource.data.text.size() <= 1000;
-        allow update: if false;
+        // Only the receiving participant may acknowledge delivery/read.
+        // Never permit changing sender, text or creation time.
+        allow update: if member(threadId) &&
+          request.auth.uid != resource.data.senderId &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
+          ('deliveredAt' in request.resource.data) &&
+          request.resource.data.deliveredAt is timestamp &&
+          (
+            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
+            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
+          ) &&
+          (
+            !('seenAt' in request.resource.data) ||
+            (
+              request.resource.data.seenAt is timestamp &&
+              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
+              (
+                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
+                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
+              )
+            )
+          );
         allow delete: if member(threadId) &&
           resource.data.senderId == request.auth.uid;
       }
