@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=typing-20261011b">
+  <link rel="stylesheet" href="./style.css?v=typing-diagnostics-20261011">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -64,7 +64,18 @@
     <main class="chat-panel">
       <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Pick anyone from the People list, or search their @username to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
       <div class="chat-view hidden" id="chatView">
-        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite">Private one-to-one chat</p></div></header>
+        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite">Private one-to-one chat</p></div><button type="button" id="typingCheckToggle" class="typing-check-toggle" aria-controls="typingDiagnostics" aria-expanded="false">Typing test</button></header>
+        <div id="typingDiagnostics" class="typing-diagnostics hidden" role="region" aria-label="Typing connection diagnostics">
+          <strong>Typing connection check</strong>
+          <p id="typingReadDiagnostic">Friend's status: waiting to connect</p>
+          <p id="typingLastDiagnostic">Friend's signal: not received yet</p>
+          <p id="typingWriteDiagnostic">My signal: not sent yet</p>
+          <div class="typing-diagnostic-actions">
+            <button type="button" id="typingSendTest">Send test for 12s</button>
+            <button type="button" id="typingCheckRefresh">Check friend's signal</button>
+          </div>
+          <small>Open this conversation on both devices. Tap Send test on one phone and watch the other phone.</small>
+        </div>
         <section class="messages" id="messages" aria-live="polite"></section>
         <div id="chatTypingBubble" class="chat-typing-bubble hidden" role="status" aria-live="polite"><span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span><span>typing…</span></div>
         <div class="composer-area">
@@ -91,6 +102,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=typing-20261011b"></script>
+  <script type="module" src="./app.js?v=typing-diagnostics-20261011"></script>
 </body>
 </html>

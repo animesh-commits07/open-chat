@@ -1,6 +1,6 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,setDoc,getDoc,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,setDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
@@ -329,6 +329,82 @@ window.addEventListener('pageshow',markVisibleChatSeen);
 
 // Typing presence never stores draft text. Writes are throttled to one
 // heartbeat per 4 seconds and stop after 2.8 seconds of inactivity.
+// On-demand diagnostic: explicit Firestore read and write checks, no Cloudflare calls.
+let typingDiagnosticOpen=false;
+let typingDiagnosticRead='Waiting for friend listener';
+let typingDiagnosticWrite='No signal sent yet';
+let typingDiagnosticLast='No signal observed yet';
+function typingErrorCode(error){
+  return typeof error?.code==='string'?error.code:'unknown';
+}
+function displayTypingDiagnostics(){
+  const panel=$('typingDiagnostics');
+  if(!panel)return;
+  panel.classList.toggle('hidden',!typingDiagnosticOpen);
+  $('typingCheckToggle').setAttribute('aria-expanded',String(typingDiagnosticOpen));
+  $('typingReadDiagnostic').textContent='Friend listener: '+typingDiagnosticRead;
+  $('typingWriteDiagnostic').textContent='My signal: '+typingDiagnosticWrite;
+  $('typingLastDiagnostic').textContent='Friend signal: '+typingDiagnosticLast;
+}
+function recordFriendTyping(data){
+  const last=data?.updatedAt?.toDate?.();
+  typingDiagnosticLast=data
+    ?(data.active?'ACTIVE':'inactive')+(last?' · '+last.toLocaleTimeString(): ' · awaiting timestamp')
+    :'No typing record yet';
+  displayTypingDiagnostics();
+}
+$('typingCheckToggle').onclick=()=>{
+  typingDiagnosticOpen=!typingDiagnosticOpen;
+  displayTypingDiagnostics();
+};
+async function checkFriendTypingNow(){
+  if(!active || !me)return;
+  const threadId=active.id,peerUid=active.other.uid;
+  typingDiagnosticRead='Direct server read in progress…';
+  displayTypingDiagnostics();
+  try{
+    const snapshot=await getDocFromServer(doc(db,'threads',threadId,'typing',peerUid));
+    if(!me || active?.id!==threadId || active?.other?.uid!==peerUid)return;
+    const data=snapshot.data();
+    typingDiagnosticRead='Direct server read OK ✓';
+    typingReadError=false;
+    remoteTyping={active:data?.active===true,updatedAt:data?.updatedAt?.toMillis?.()||0};
+    recordFriendTyping(data);
+    renderTypingPresence();
+    scheduleRemoteTypingExpiry();
+  }catch(error){
+    console.warn('Direct typing check failed:',error);
+    if(!me || active?.id!==threadId || active?.other?.uid!==peerUid)return;
+    typingDiagnosticRead='Direct server read failed: '+typingErrorCode(error);
+    typingReadError=true;
+    displayTypingDiagnostics();
+    renderTypingPresence();
+  }
+}
+$('typingCheckRefresh').onclick=checkFriendTypingNow;
+function runTypingTest(){
+  if(!me || !active || document.hidden)return;
+  const threadId=active.id,uid=me.uid;
+  stopOwnTyping();
+  ownTyping={threadId,uid};
+  ownTypingLastSignal=Date.now();
+  $('typingSendTest').disabled=true;
+  typingDiagnosticWrite='Sending test signal to Firestore…';
+  displayTypingDiagnostics();
+  void queueTypingSignal(threadId,uid,true).then(result=>{
+    if(!me || me.uid!==uid || active?.id!==threadId)return;
+    if(!result?.ok){
+      stopOwnTyping();
+      $('typingSendTest').disabled=false;
+      return;
+    }
+    if(ownTyping?.threadId!==threadId)return;
+    if(ownTypingTimer!==null)clearTimeout(ownTypingTimer);
+    ownTypingTimer=setTimeout(stopOwnTyping,12000);
+  });
+}
+$('typingSendTest').onclick=runTypingTest;
+
 const TYPING_IDLE_MS=5000,TYPING_REFRESH_MS=4000,TYPING_EXPIRE_MS=15000;
 let ownTyping=null,ownTypingTimer=null,ownTypingLastSignal=0;
 let typingUnsubscribe=null,typingExpiryTimer=null;
@@ -337,21 +413,34 @@ let typingReadError=false,typingWriteError=false;
 let typingWriteQueue=Promise.resolve();
 function queueTypingSignal(threadId,uid,isActive){
   const send=async()=>{
-    if(!me || me.uid!==uid)return;
+    if(!me || me.uid!==uid)return {ok:false,code:'account-changed'};
+    if(active?.id===threadId){
+      typingDiagnosticWrite='Sending '+(isActive?'typing':'stopped')+'…';
+      displayTypingDiagnostics();
+    }
     try{
       await setDoc(doc(db,'threads',threadId,'typing',uid),
         {active:isActive,updatedAt:serverTimestamp()});
       if(active?.id===threadId && me?.uid===uid){
-        if(typingWriteError){typingWriteError=false;renderTypingPresence()}
+        typingWriteError=false;
+        typingDiagnosticWrite=(isActive?'Typing ON':'Typing OFF')+' confirmed by Firestore ✓';
+        renderTypingPresence();
+        displayTypingDiagnostics();
       }
+      return {ok:true};
     }catch(error){
       console.warn('Typing status unavailable:',error);
       if(active?.id===threadId && me?.uid===uid){
-        typingWriteError=true;renderTypingPresence();
+        typingWriteError=true;
+        typingDiagnosticWrite='Write FAILED: '+typingErrorCode(error);
+        renderTypingPresence();
+        displayTypingDiagnostics();
       }
+      return {ok:false,code:typingErrorCode(error)};
     }
   };
   typingWriteQueue=typingWriteQueue.then(send,send);
+  return typingWriteQueue;
 }
 function stopOwnTyping(){
   if(ownTypingTimer!==null)clearTimeout(ownTypingTimer);
@@ -359,7 +448,8 @@ function stopOwnTyping(){
   if(!ownTyping)return;
   const old=ownTyping;
   ownTyping=null;ownTypingLastSignal=0;
-  queueTypingSignal(old.threadId,old.uid,false);
+  if($('typingSendTest'))$('typingSendTest').disabled=false;
+  void queueTypingSignal(old.threadId,old.uid,false);
 }
 function onOwnTypingInput(){
   if(!me || !active || document.hidden || !$('messageInput').value.trim()){
@@ -406,10 +496,19 @@ function closeTypingSession(){
   typingExpiryTimer=null;
   remoteTyping={active:false,updatedAt:0};
   typingReadError=false;typingWriteError=false;
+  typingDiagnosticOpen=false;
+  typingDiagnosticRead='Waiting for friend listener';
+  typingDiagnosticWrite='No signal sent yet';
+  typingDiagnosticLast='No signal observed yet';
+  if($('typingSendTest'))$('typingSendTest').disabled=false;
+  displayTypingDiagnostics();
   renderTypingPresence();
 }
 function watchOtherTyping(threadId,otherUid){
   remoteTyping={active:false,updatedAt:0};
+  typingDiagnosticRead='Connecting to Firestore…';
+  typingDiagnosticLast='No signal received yet';
+  displayTypingDiagnostics();
   renderTypingPresence();
   typingUnsubscribe=onSnapshot(
     doc(db,'threads',threadId,'typing',otherUid),
@@ -422,13 +521,20 @@ function watchOtherTyping(threadId,otherUid){
         updatedAt:data?.updatedAt?.toMillis?.()||0
       };
       typingReadError=false;
+      typingDiagnosticRead=snapshot.metadata.fromCache
+        ?'Local cache (waiting for server)'
+        :'Listener connected to Firestore ✓';
+      recordFriendTyping(data);
       renderTypingPresence();
       scheduleRemoteTypingExpiry();
     },
     error=>{
       console.warn('Could not watch typing status:',error);
       typingReadError=true;
+      typingDiagnosticRead='Listener FAILED: '+typingErrorCode(error);
+      typingDiagnosticLast='Not available';
       remoteTyping={active:false,updatedAt:0};
+      displayTypingDiagnostics();
       renderTypingPresence();
       scheduleRemoteTypingExpiry();
     }
