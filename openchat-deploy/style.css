@@ -123,3 +123,14 @@
 
 /* Let the app's long-press menu handle copying on touchscreen devices. */
 @media(hover:none){.msg .msg-body,.msg .reply-quote-text{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+
+/* Private real-time typing status in the chat header. */
+.chat-info .chat-presence{min-height:17px;transition:color .15s ease}
+.chat-info .chat-presence.is-typing{color:var(--green);font-weight:700}
+.chat-info .chat-presence.is-typing::before{
+  content:"";display:inline-block;width:7px;height:7px;
+  border-radius:50%;background:var(--green);margin:0 7px 1px 0;
+  animation:typing-presence-pulse 1.15s ease-in-out infinite;
+}
+@keyframes typing-presence-pulse{0%,100%{opacity:.45;transform:scale(.82)}50%{opacity:1;transform:scale(1.18)}}
+@media(prefers-reduced-motion:reduce){.chat-info .chat-presence.is-typing::before{animation:none}}

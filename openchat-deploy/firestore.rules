@@ -80,6 +80,20 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
       allow delete: if false;
 
+      // Ephemeral activity status: only chat members can read the other person's
+      // status, and only the signed-in user may update their OWN document.
+      match /typing/{uid} {
+        allow get: if member(threadId);
+        allow list: if false;
+        allow create, update: if member(threadId) &&
+          request.auth.uid == uid &&
+          request.resource.data.keys().hasOnly(['active', 'updatedAt']) &&
+          request.resource.data.keys().hasAll(['active', 'updatedAt']) &&
+          request.resource.data.active is bool &&
+          request.resource.data.updatedAt == request.time;
+        allow delete: if member(threadId) && request.auth.uid == uid;
+      }
+
       match /messages/{messageId} {
         allow get, list: if member(threadId);
         allow create: if member(threadId) &&

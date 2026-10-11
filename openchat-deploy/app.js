@@ -180,6 +180,7 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  closeTypingSession();
   clearReceiptWatchers();
   clearReply();closeActions();
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
@@ -325,6 +326,104 @@ function markVisibleChatSeen(){
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)markVisibleChatSeen()});
 window.addEventListener('focus',markVisibleChatSeen);
 window.addEventListener('pageshow',markVisibleChatSeen);
+
+// Typing presence never stores draft text. Writes are throttled to one
+// heartbeat per 4 seconds and stop after 2.8 seconds of inactivity.
+const TYPING_IDLE_MS=2800,TYPING_REFRESH_MS=4000,TYPING_EXPIRE_MS=8500;
+let ownTyping=null,ownTypingTimer=null,ownTypingLastSignal=0;
+let typingUnsubscribe=null,typingExpiryTimer=null;
+let remoteTyping={active:false,updatedAt:0};
+let typingWriteQueue=Promise.resolve();
+function queueTypingSignal(threadId,uid,isActive){
+  const send=async()=>{
+    if(!me || me.uid!==uid)return;
+    try{
+      await setDoc(doc(db,'threads',threadId,'typing',uid),
+        {active:isActive,updatedAt:serverTimestamp()});
+    }catch(error){console.warn('Typing status unavailable:',error)}
+  };
+  typingWriteQueue=typingWriteQueue.then(send,send);
+}
+function stopOwnTyping(){
+  if(ownTypingTimer!==null)clearTimeout(ownTypingTimer);
+  ownTypingTimer=null;
+  if(!ownTyping)return;
+  const old=ownTyping;
+  ownTyping=null;ownTypingLastSignal=0;
+  queueTypingSignal(old.threadId,old.uid,false);
+}
+function onOwnTypingInput(){
+  if(!me || !active || document.hidden || !$('messageInput').value.trim()){
+    stopOwnTyping();return;
+  }
+  const threadId=active.id,uid=me.uid;
+  if(ownTyping && (ownTyping.threadId!==threadId || ownTyping.uid!==uid))stopOwnTyping();
+  const now=Date.now();
+  if(!ownTyping || now-ownTypingLastSignal>=TYPING_REFRESH_MS){
+    ownTyping={threadId,uid};
+    ownTypingLastSignal=now;
+    queueTypingSignal(threadId,uid,true);
+  }
+  if(ownTypingTimer!==null)clearTimeout(ownTypingTimer);
+  ownTypingTimer=setTimeout(stopOwnTyping,TYPING_IDLE_MS);
+}
+$('messageInput').addEventListener('input',onOwnTypingInput);
+function renderTypingPresence(){
+  const label=$('chatPresence');
+  const isFresh=remoteTyping.active && remoteTyping.updatedAt>0 &&
+    Date.now()-remoteTyping.updatedAt<TYPING_EXPIRE_MS;
+  const text=isFresh?'typing…':'Private one-to-one chat';
+  if(label.textContent!==text)label.textContent=text;
+  label.classList.toggle('is-typing',isFresh);
+}
+function scheduleRemoteTypingExpiry(){
+  if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
+  typingExpiryTimer=null;
+  if(!remoteTyping.active || !remoteTyping.updatedAt)return;
+  const remaining=remoteTyping.updatedAt+TYPING_EXPIRE_MS-Date.now();
+  if(remaining<=0)return;
+  typingExpiryTimer=setTimeout(()=>{
+    typingExpiryTimer=null;
+    renderTypingPresence();
+  },Math.min(TYPING_EXPIRE_MS,remaining));
+}
+function closeTypingSession(){
+  stopOwnTyping();
+  if(typingUnsubscribe){typingUnsubscribe();typingUnsubscribe=null}
+  if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
+  typingExpiryTimer=null;
+  remoteTyping={active:false,updatedAt:0};
+  renderTypingPresence();
+}
+function watchOtherTyping(threadId,otherUid){
+  remoteTyping={active:false,updatedAt:0};
+  renderTypingPresence();
+  typingUnsubscribe=onSnapshot(
+    doc(db,'threads',threadId,'typing',otherUid),
+    {includeMetadataChanges:true},
+    snapshot=>{
+      if(active?.id!==threadId || active?.other?.uid!==otherUid || !me)return;
+      const data=snapshot.data();
+      remoteTyping={
+        active:!snapshot.metadata.fromCache && data?.active===true,
+        updatedAt:data?.updatedAt?.toMillis?.()||0
+      };
+      renderTypingPresence();
+      scheduleRemoteTypingExpiry();
+    },
+    error=>{
+      console.warn('Could not watch typing status:',error);
+      remoteTyping={active:false,updatedAt:0};
+      renderTypingPresence();
+      scheduleRemoteTypingExpiry();
+    }
+  );
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)stopOwnTyping();
+  renderTypingPresence();
+});
+window.addEventListener('pagehide',stopOwnTyping);
 
 function watchThreads(){
   stopThreads=onSnapshot(query(collection(db,'threads'),where('members','array-contains',me.uid)),snap=>{
@@ -585,6 +684,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  closeTypingSession();
   clearReply();closeActions();
   active={id,other:u};
   $('chatWelcome').classList.add('hidden');
@@ -592,6 +692,7 @@ function openChat(id,u){
   $('appShell').classList.add('chat-open');
   $('chatName').textContent='@'+(u.username||'user');
   $('chatAvatar').textContent=initials(u.username);
+  watchOtherTyping(id,u.uid);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -647,7 +748,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(!active||!me)return;
@@ -656,6 +757,7 @@ $('messageForm').onsubmit=async event=>{
   const threadId=active.id,sender=me,chosen=replyDraft?.threadId===active.id?replyDraft:null;
   const payload={senderId:sender.uid,text,createdAt:serverTimestamp()};
   if(chosen)payload.replyTo={id:chosen.id,senderId:chosen.senderId,text:chosen.text};
+  stopOwnTyping();
   $('sendBtn').disabled=true;status('Sending…');
   try{
     const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
