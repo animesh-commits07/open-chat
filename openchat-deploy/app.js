@@ -413,21 +413,34 @@ let typingReadError=false,typingWriteError=false;
 let typingWriteQueue=Promise.resolve();
 function queueTypingSignal(threadId,uid,isActive){
   const send=async()=>{
-    if(!me || me.uid!==uid)return;
+    if(!me || me.uid!==uid)return {ok:false,code:'account-changed'};
+    if(active?.id===threadId){
+      typingDiagnosticWrite='Sending '+(isActive?'typing':'stopped')+'…';
+      displayTypingDiagnostics();
+    }
     try{
       await setDoc(doc(db,'threads',threadId,'typing',uid),
         {active:isActive,updatedAt:serverTimestamp()});
       if(active?.id===threadId && me?.uid===uid){
-        if(typingWriteError){typingWriteError=false;renderTypingPresence()}
+        typingWriteError=false;
+        typingDiagnosticWrite=(isActive?'Typing ON':'Typing OFF')+' confirmed by Firestore ✓';
+        renderTypingPresence();
+        displayTypingDiagnostics();
       }
+      return {ok:true};
     }catch(error){
       console.warn('Typing status unavailable:',error);
       if(active?.id===threadId && me?.uid===uid){
-        typingWriteError=true;renderTypingPresence();
+        typingWriteError=true;
+        typingDiagnosticWrite='Write FAILED: '+typingErrorCode(error);
+        renderTypingPresence();
+        displayTypingDiagnostics();
       }
+      return {ok:false,code:typingErrorCode(error)};
     }
   };
   typingWriteQueue=typingWriteQueue.then(send,send);
+  return typingWriteQueue;
 }
 function stopOwnTyping(){
   if(ownTypingTimer!==null)clearTimeout(ownTypingTimer);
@@ -435,7 +448,8 @@ function stopOwnTyping(){
   if(!ownTyping)return;
   const old=ownTyping;
   ownTyping=null;ownTypingLastSignal=0;
-  queueTypingSignal(old.threadId,old.uid,false);
+  if($('typingSendTest'))$('typingSendTest').disabled=false;
+  void queueTypingSignal(old.threadId,old.uid,false);
 }
 function onOwnTypingInput(){
   if(!me || !active || document.hidden || !$('messageInput').value.trim()){
