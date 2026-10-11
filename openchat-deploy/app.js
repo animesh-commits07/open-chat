@@ -452,6 +452,7 @@ function stopOwnTyping(){
   void queueTypingSignal(old.threadId,old.uid,false);
 }
 function onOwnTypingInput(){
+  if(editDraft){stopOwnTyping();return;}
   if(!me || !active || document.hidden || !$('messageInput').value.trim()){
     stopOwnTyping();return;
   }
@@ -770,6 +771,7 @@ async function submitMessageEdit(){
 
 function startReply(item,message,threadId){
   if(!me || active?.id!==threadId)return;
+  if(editDraft)stopEditing(true);
   if(item.metadata?.hasPendingWrites){status('Wait for this message to send first.');return}
   replyDraft={threadId,id:item.id,senderId:message.senderId,text:message.text};
   $('replyPreviewAuthor').textContent='Replying to '+authorFor(message.senderId);
@@ -795,6 +797,9 @@ function showActions(item,message,node,threadId){
   menu.setAttribute('role','group');menu.setAttribute('aria-label','Message actions');
   const reply=el('button','primary-action','↩ Reply');
   reply.type='button';reply.onclick=()=>startReply(item,message,threadId);
+  const editAllowed=canEditMessage(item,message);
+  const edit=editAllowed?el('button',null,'✎ Edit message'):null;
+  if(edit){edit.type='button';edit.onclick=()=>startEdit(item,message,threadId)}
   const copy=el('button',null,'Copy message');
   copy.type='button';copy.onclick=async()=>{
     closeActions();
@@ -803,11 +808,13 @@ function showActions(item,message,node,threadId){
   };
   const cancel=el('button',null,'Cancel');
   cancel.type='button';cancel.onclick=closeActions;
-  menu.append(reply,copy,cancel);
+  menu.append(reply);
+  if(edit)menu.append(edit);
+  menu.append(copy,cancel);
   document.body.append(menu);actionMenu=menu;
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
-    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-190)+'px';
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?240:190))+'px';
     menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
   }
   reply.focus({preventScroll:true});
