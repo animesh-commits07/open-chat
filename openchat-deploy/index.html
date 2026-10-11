@@ -66,7 +66,16 @@
       <div class="chat-view hidden" id="chatView">
         <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p>Private one-to-one chat</p></div></header>
         <section class="messages" id="messages" aria-live="polite"></section>
-        <div class="composer-area"><form class="composer" id="messageForm"><textarea id="messageInput" rows="1" maxlength="1000" placeholder="Write a personal message…" required></textarea><button class="send" id="sendBtn" type="submit" aria-label="Send message">➤</button></form><p class="status" id="status" role="status" aria-live="polite"></p></div>
+        <div class="composer-area">
+          <div id="replyPreview" class="reply-composer hidden" role="status" aria-live="polite">
+            <div class="reply-composer-mark" aria-hidden="true">↩</div>
+            <div class="reply-composer-content">
+              <strong id="replyPreviewAuthor">Replying to a message</strong>
+              <p id="replyPreviewText"></p>
+            </div>
+            <button id="cancelReply" type="button" class="reply-composer-close" aria-label="Cancel reply" title="Cancel reply">×</button>
+          </div>
+          <form class="composer" id="messageForm"><textarea id="messageInput" rows="1" maxlength="1000" placeholder="Write a personal message…" required></textarea><button class="send" id="sendBtn" type="submit" aria-label="Send message">➤</button></form><p class="status" id="status" role="status" aria-live="polite"></p></div>
       </div>
     </main>
   </div>

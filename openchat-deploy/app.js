@@ -181,6 +181,7 @@ onAuthStateChanged(auth,async u=>{
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
   clearReceiptWatchers();
+  clearReply();closeActions();
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
   $('notificationPrompt').classList.add('hidden');
   $('sessionLoading').classList.remove('hidden');
@@ -455,8 +456,136 @@ function isSingleEmojiMessage(value){
     /^[0-9#*]\uFE0F?\u20E3$/u.test(grapheme);
 }
 
+
+let replyDraft=null,actionMenu=null;
+function clearReply(){
+  replyDraft=null;
+  $('replyPreview').classList.add('hidden');
+  $('replyPreviewAuthor').textContent='';
+  $('replyPreviewText').textContent='';
+}
+$('cancelReply').onclick=clearReply;
+function authorFor(uid){return uid===me?.uid?'You':'@'+(active?.other?.username||'User')}
+function startReply(item,message,threadId){
+  if(!me || active?.id!==threadId)return;
+  if(item.metadata?.hasPendingWrites){status('Wait for this message to send first.');return}
+  replyDraft={threadId,id:item.id,senderId:message.senderId,text:message.text};
+  $('replyPreviewAuthor').textContent='Replying to '+authorFor(message.senderId);
+  $('replyPreviewText').textContent=message.text;
+  $('replyPreview').classList.remove('hidden');
+  closeActions();
+  $('messageInput').focus();
+}
+function jumpToOriginal(id){
+  const target=[...$('messages').children].find(n=>n.dataset.messageId===id);
+  if(!target){status('Original message was deleted or is older than the latest 300.');return}
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  target.classList.remove('reply-highlight');
+  void target.offsetWidth;
+  target.classList.add('reply-highlight');
+}
+
+function closeActions(){if(actionMenu){actionMenu.remove();actionMenu=null}}
+function showActions(item,message,node,threadId){
+  if(!me || active?.id!==threadId)return;
+  closeActions();
+  const menu=el('div','message-action-menu');
+  menu.setAttribute('role','group');menu.setAttribute('aria-label','Message actions');
+  const reply=el('button','primary-action','↩ Reply');
+  reply.type='button';reply.onclick=()=>startReply(item,message,threadId);
+  const copy=el('button',null,'Copy message');
+  copy.type='button';copy.onclick=async()=>{
+    closeActions();
+    try{await navigator.clipboard.writeText(message.text)}
+    catch(error){status('Copy unavailable: '+error.message)}
+  };
+  const cancel=el('button',null,'Cancel');
+  cancel.type='button';cancel.onclick=closeActions;
+  menu.append(reply,copy,cancel);
+  document.body.append(menu);actionMenu=menu;
+  if(window.innerWidth>700){
+    const rect=node.getBoundingClientRect();
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-190)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
+  }
+  reply.focus({preventScroll:true});
+}
+document.addEventListener('pointerdown',event=>{
+  if(actionMenu && !actionMenu.contains(event.target))closeActions();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){
+    if(actionMenu)closeActions();
+    else if(replyDraft)clearReply();
+  }
+});
+
+
+function enableReplyGesture(node,item,message,threadId){
+  let touch=null,hold=null;
+  const stopHold=()=>{if(hold!==null){clearTimeout(hold);hold=null}};
+  const reset=()=>{
+    stopHold();
+    node.style.transform='';
+    node.style.transition='';
+    node.classList.remove('swiping-reply');
+    touch=null;
+  };
+  node.addEventListener('touchstart',event=>{
+    if(event.touches.length!==1 || event.target.closest('button'))return;
+    const finger=event.touches[0];
+    touch={x:finger.clientX,y:finger.clientY,dx:0,cancelled:false,held:false};
+    stopHold();
+    hold=setTimeout(()=>{
+      hold=null;
+      if(touch && !touch.cancelled && Math.abs(touch.dx)<12){
+        touch.held=true;
+        showActions(item,message,node,threadId);
+      }
+    },530);
+  },{passive:true});
+  node.addEventListener('touchmove',event=>{
+    if(!touch || event.touches.length!==1)return;
+    const finger=event.touches[0];
+    const dx=finger.clientX-touch.x,dy=finger.clientY-touch.y;
+    touch.dx=dx;
+    if(touch.held)return;
+    if(Math.abs(dy)>19 || dx>15){touch.cancelled=true;stopHold()}
+    if(Math.abs(dx)>12)stopHold();
+    if(touch.cancelled || Math.abs(dy)>36)return;
+    const slide=Math.min(72,Math.max(0,-dx));
+    if(slide>4){
+      node.style.transition='none';
+      node.style.transform='translateX(-'+slide+'px)';
+      node.classList.add('swiping-reply');
+    }
+  },{passive:true});
+  node.addEventListener('touchend',()=>{
+    if(!touch)return;
+    const swiped=!touch.held && !touch.cancelled && touch.dx<=-62;
+    reset();
+    if(swiped)startReply(item,message,threadId);
+  },{passive:true});
+  node.addEventListener('touchcancel',reset,{passive:true});
+  node.addEventListener('contextmenu',event=>{
+    if(event.target.closest('button'))return;
+    event.preventDefault();
+    showActions(item,message,node,threadId);
+  });
+}
+
+function createQuote(replyTo){
+  if(!replyTo || typeof replyTo.id!=='string' || typeof replyTo.text!=='string')return null;
+  const q=el('button','reply-quote');q.type='button';
+  q.title='Jump to original message';
+  q.append(el('span','reply-quote-author',authorFor(replyTo.senderId)),el('span','reply-quote-text',replyTo.text));
+  q.onclick=()=>jumpToOriginal(replyTo.id);
+  return q;
+}
+
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  clearReply();closeActions();
   active={id,other:u};
   $('chatWelcome').classList.add('hidden');
   $('chatView').classList.remove('hidden');
@@ -478,11 +607,21 @@ function openChat(id,u){
       visibleChatDocuments=messages;
       for(const item of messages){
         const message=item.data(),own=message.senderId===ownUid;
-        const node=el('article','msg'+(own?' own':'')+(isSingleEmojiMessage(message.text)?' emoji-only':''));
+        const node=el('article','msg'+(own?' own':'')+(!message.replyTo && isSingleEmojiMessage(message.text)?' emoji-only':''));
+        node.dataset.messageId=item.id;
+        const quote=createQuote(message.replyTo);
+        if(quote)node.append(quote);
         node.append(el('div','msg-body',message.text));
+        enableReplyGesture(node,item,message,id);
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
         meta.append(el('span',null,when?when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));
+        const replyButton=el('button','reply-trigger','↩');
+        replyButton.type='button';
+        replyButton.title='Reply to this message';
+        replyButton.setAttribute('aria-label','Reply to this message');
+        replyButton.onclick=()=>startReply(item,message,id);
+        meta.append(replyButton);
         if(own){
           const state=outgoingReceiptState(message,!!item.metadata?.hasPendingWrites);
           const ticks=el('span','receipt-ticks receipt-'+state,state==='sending'?'◷':state==='sent'?'✓':'✓✓');
@@ -508,5 +647,24 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{$('appShell').classList.remove('chat-open')};
-$('messageForm').onsubmit=async e=>{e.preventDefault();if(!active||!me)return;const text=clean($('messageInput').value);if(!text)return;const id=active.id, sender=me;$('sendBtn').disabled=true;status('Sending…');try{const sent=await addDoc(collection(db,'threads',id,'messages'),{senderId:sender.uid,text,createdAt:serverTimestamp()});$('messageInput').value='';status('Sent');void notifyRecipient(id,sent.id,sender)}catch(err){status('Send failed: '+err.message)}finally{$('sendBtn').disabled=false}};
+$('backToChats').onclick=()=>{clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('messageForm').onsubmit=async event=>{
+  event.preventDefault();
+  if(!active||!me)return;
+  const text=clean($('messageInput').value);
+  if(!text)return;
+  const threadId=active.id,sender=me,chosen=replyDraft?.threadId===active.id?replyDraft:null;
+  const payload={senderId:sender.uid,text,createdAt:serverTimestamp()};
+  if(chosen)payload.replyTo={id:chosen.id,senderId:chosen.senderId,text:chosen.text};
+  $('sendBtn').disabled=true;status('Sending…');
+  try{
+    const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
+    if(active?.id===threadId){
+      $('messageInput').value='';
+      if(chosen && replyDraft===chosen)clearReply();
+      status('Sent');
+    }
+    void notifyRecipient(threadId,sent.id,sender);
+  }catch(error){status('Send failed: '+error.message)}
+  finally{$('sendBtn').disabled=false}
+};

@@ -45,6 +45,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Replies quote only an actual message from the SAME private chat.
+    function validReply(threadId) {
+      return !('replyTo' in request.resource.data) || (
+        request.resource.data.replyTo is map &&
+        request.resource.data.replyTo.keys().hasOnly(['id', 'senderId', 'text']) &&
+        request.resource.data.replyTo.keys().hasAll(['id', 'senderId', 'text']) &&
+        request.resource.data.replyTo.id is string &&
+        request.resource.data.replyTo.id.size() == 20 &&
+        request.resource.data.replyTo.id.matches('^[A-Za-z0-9]+$') &&
+        request.resource.data.replyTo.senderId is string &&
+        request.resource.data.replyTo.text is string &&
+        request.resource.data.replyTo.text.size() <= 1000 &&
+        exists(/databases/$(database)/documents/threads/$(threadId)/messages/$(request.resource.data.replyTo.id)) &&
+        get(/databases/$(database)/documents/threads/$(threadId)/messages/$(request.resource.data.replyTo.id)).data.senderId == request.resource.data.replyTo.senderId &&
+        get(/databases/$(database)/documents/threads/$(threadId)/messages/$(request.resource.data.replyTo.id)).data.text == request.resource.data.replyTo.text
+      );
+    }
+
     match /threads/{threadId} {
       allow get, list: if signedIn() && request.auth.uid in resource.data.members;
       allow create: if signedIn() &&
@@ -65,7 +83,8 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow get, list: if member(threadId);
         allow create: if member(threadId) &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
+          validReply(threadId) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() > 0 &&
@@ -74,7 +93,7 @@ service cloud.firestore {
         // Never permit changing sender, text or creation time.
         allow update: if member(threadId) &&
           request.auth.uid != resource.data.senderId &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'deliveredAt', 'seenAt']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'deliveredAt', 'seenAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
           ('deliveredAt' in request.resource.data) &&
