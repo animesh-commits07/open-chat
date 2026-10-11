@@ -455,6 +455,43 @@ function isSingleEmojiMessage(value){
     /^[0-9#*]\uFE0F?\u20E3$/u.test(grapheme);
 }
 
+
+let replyDraft=null,actionMenu=null;
+function clearReply(){
+  replyDraft=null;
+  $('replyPreview').classList.add('hidden');
+  $('replyPreviewAuthor').textContent='';
+  $('replyPreviewText').textContent='';
+}
+$('cancelReply').onclick=clearReply;
+function authorFor(uid){return uid===me?.uid?'You':'@'+(active?.other?.username||'User')}
+function startReply(item,message,threadId){
+  if(!me || active?.id!==threadId)return;
+  if(item.metadata?.hasPendingWrites){status('Wait for this message to send first.');return}
+  replyDraft={threadId,id:item.id,senderId:message.senderId,text:message.text};
+  $('replyPreviewAuthor').textContent='Replying to '+authorFor(message.senderId);
+  $('replyPreviewText').textContent=message.text;
+  $('replyPreview').classList.remove('hidden');
+  closeActions();
+  $('messageInput').focus();
+}
+function jumpToOriginal(id){
+  const target=[...$('messages').children].find(n=>n.dataset.messageId===id);
+  if(!target){status('Original message was deleted or is older than the latest 300.');return}
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  target.classList.remove('reply-highlight');
+  void target.offsetWidth;
+  target.classList.add('reply-highlight');
+}
+function createQuote(replyTo){
+  if(!replyTo || typeof replyTo.id!=='string' || typeof replyTo.text!=='string')return null;
+  const q=el('button','reply-quote');q.type='button';
+  q.title='Jump to original message';
+  q.append(el('span','reply-quote-author',authorFor(replyTo.senderId)),el('span','reply-quote-text',replyTo.text));
+  q.onclick=()=>jumpToOriginal(replyTo.id);
+  return q;
+}
+
 function openChat(id,u){
   if(stopMessages)stopMessages();
   active={id,other:u};
