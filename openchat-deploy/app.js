@@ -438,6 +438,23 @@ $('searchInput').oninput=()=>{
   },250);
 };
 async function startChat(u){try{const id=pair(me.uid,u.uid);await setDoc(doc(db,'threads',id),{members:[me.uid,u.uid].sort(),updatedAt:serverTimestamp()},{merge:true});openChat(id,u)}catch(e){alert('Could not create chat: '+e.message)}}
+// A single emoji grapheme (including skin tones, family ZWJ sequences,
+// regional-indicator flags, and keycap emoji) gets a bubble-free large display.
+// Text mixed with emojis and messages containing multiple emojis stay normal.
+const singleEmojiSegmenter=typeof Intl.Segmenter==='function'
+  ?new Intl.Segmenter(undefined,{granularity:'grapheme'}):null;
+function isSingleEmojiMessage(value){
+  const text=String(value||'').trim();
+  if(!text||!singleEmojiSegmenter)return false;
+  const iterator=singleEmojiSegmenter.segment(text)[Symbol.iterator]();
+  const first=iterator.next();
+  if(first.done||!iterator.next().done)return false;
+  const grapheme=first.value.segment;
+  return /\p{Extended_Pictographic}/u.test(grapheme) ||
+    /^\p{Regional_Indicator}{2}$/u.test(grapheme) ||
+    /^[0-9#*]\uFE0F?\u20E3$/u.test(grapheme);
+}
+
 function openChat(id,u){
   if(stopMessages)stopMessages();
   active={id,other:u};
@@ -461,7 +478,7 @@ function openChat(id,u){
       visibleChatDocuments=messages;
       for(const item of messages){
         const message=item.data(),own=message.senderId===ownUid;
-        const node=el('article','msg'+(own?' own':''));
+        const node=el('article','msg'+(own?' own':'')+(isSingleEmojiMessage(message.text)?' emoji-only':''));
         node.append(el('div','msg-body',message.text));
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
