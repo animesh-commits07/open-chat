@@ -50,3 +50,10 @@
 .notification-prompt-dismiss{background:#2b3640;color:var(--text)}
 .notification-prompt-actions button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 @media(max-width:700px){.notification-prompt{top:max(12px,env(safe-area-inset-top));bottom:auto;left:12px;right:12px;width:auto;padding:15px;gap:10px;border-radius:17px}.notification-prompt-content strong{font-size:14px}.notification-prompt-actions button{min-height:44px}}
+
+/* WhatsApp-style delivery markers: one gray tick = sent, two = delivered, blue = seen. */
+.receipt-ticks{display:inline-block;vertical-align:middle;white-space:nowrap;line-height:1;min-width:18px;font-weight:800;font-size:15px;letter-spacing:-4px;padding-right:4px;color:#d0ddd8;user-select:none}
+.receipt-sent,.receipt-sending{letter-spacing:0;min-width:11px;padding-right:0}
+.receipt-sending{color:#a1c2b3;font-weight:500}
+.receipt-delivered{color:#d0ddd8}
+.receipt-seen{color:#5ecbff;text-shadow:0 0 5px rgba(94,203,255,.3)}
