@@ -329,10 +329,11 @@ window.addEventListener('pageshow',markVisibleChatSeen);
 
 // Typing presence never stores draft text. Writes are throttled to one
 // heartbeat per 4 seconds and stop after 2.8 seconds of inactivity.
-const TYPING_IDLE_MS=2800,TYPING_REFRESH_MS=4000,TYPING_EXPIRE_MS=8500;
+const TYPING_IDLE_MS=5000,TYPING_REFRESH_MS=4000,TYPING_EXPIRE_MS=15000;
 let ownTyping=null,ownTypingTimer=null,ownTypingLastSignal=0;
 let typingUnsubscribe=null,typingExpiryTimer=null;
 let remoteTyping={active:false,updatedAt:0};
+let typingReadError=false,typingWriteError=false;
 let typingWriteQueue=Promise.resolve();
 function queueTypingSignal(threadId,uid,isActive){
   const send=async()=>{
@@ -340,7 +341,15 @@ function queueTypingSignal(threadId,uid,isActive){
     try{
       await setDoc(doc(db,'threads',threadId,'typing',uid),
         {active:isActive,updatedAt:serverTimestamp()});
-    }catch(error){console.warn('Typing status unavailable:',error)}
+      if(active?.id===threadId && me?.uid===uid){
+        if(typingWriteError){typingWriteError=false;renderTypingPresence()}
+      }
+    }catch(error){
+      console.warn('Typing status unavailable:',error);
+      if(active?.id===threadId && me?.uid===uid){
+        typingWriteError=true;renderTypingPresence();
+      }
+    }
   };
   typingWriteQueue=typingWriteQueue.then(send,send);
 }
@@ -372,9 +381,12 @@ function renderTypingPresence(){
   const label=$('chatPresence');
   const isFresh=remoteTyping.active && remoteTyping.updatedAt>0 &&
     Date.now()-remoteTyping.updatedAt<TYPING_EXPIRE_MS;
-  const text=isFresh?'typing…':'Private one-to-one chat';
+  const error=typingReadError||typingWriteError;
+  const text=isFresh?'typing…':error?'Typing unavailable · check Firestore Rules':'Private one-to-one chat';
   if(label.textContent!==text)label.textContent=text;
   label.classList.toggle('is-typing',isFresh);
+  label.classList.toggle('is-error',!isFresh && error);
+  $('chatTypingBubble')?.classList.toggle('hidden',!isFresh || document.hidden);
 }
 function scheduleRemoteTypingExpiry(){
   if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
@@ -393,6 +405,7 @@ function closeTypingSession(){
   if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
   typingExpiryTimer=null;
   remoteTyping={active:false,updatedAt:0};
+  typingReadError=false;typingWriteError=false;
   renderTypingPresence();
 }
 function watchOtherTyping(threadId,otherUid){
@@ -405,14 +418,16 @@ function watchOtherTyping(threadId,otherUid){
       if(active?.id!==threadId || active?.other?.uid!==otherUid || !me)return;
       const data=snapshot.data();
       remoteTyping={
-        active:!snapshot.metadata.fromCache && data?.active===true,
+        active:data?.active===true,
         updatedAt:data?.updatedAt?.toMillis?.()||0
       };
+      typingReadError=false;
       renderTypingPresence();
       scheduleRemoteTypingExpiry();
     },
     error=>{
       console.warn('Could not watch typing status:',error);
+      typingReadError=true;
       remoteTyping={active:false,updatedAt:0};
       renderTypingPresence();
       scheduleRemoteTypingExpiry();

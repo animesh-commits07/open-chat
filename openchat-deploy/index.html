@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=typing-20261011b">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -66,6 +66,7 @@
       <div class="chat-view hidden" id="chatView">
         <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite">Private one-to-one chat</p></div></header>
         <section class="messages" id="messages" aria-live="polite"></section>
+        <div id="chatTypingBubble" class="chat-typing-bubble hidden" role="status" aria-live="polite"><span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span><span>typing…</span></div>
         <div class="composer-area">
           <div id="replyPreview" class="reply-composer hidden" role="status" aria-live="polite">
             <div class="reply-composer-mark" aria-hidden="true">↩</div>
@@ -90,6 +91,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=typing-20261011b"></script>
 </body>
 </html>
