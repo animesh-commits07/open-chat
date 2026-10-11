@@ -760,6 +760,10 @@ async function submitMessageEdit(){
     await updateDoc(doc(db,'threads',selected.threadId,'messages',selected.id),
       {text,editedAt:serverTimestamp()});
     if(editDraft===selected && active?.id===selected.threadId){
+      // Keep an unsent reply draft valid if it quotes this exact edited message.
+      if(selected.previousReply?.id===selected.id){
+        selected.previousReply={...selected.previousReply,text};
+      }
       stopEditing(true);
       status('Message edited');
     }
