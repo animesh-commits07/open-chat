@@ -519,6 +519,60 @@ document.addEventListener('keydown',event=>{
   }
 });
 
+
+function enableReplyGesture(node,item,message,threadId){
+  let touch=null,hold=null;
+  const stopHold=()=>{if(hold!==null){clearTimeout(hold);hold=null}};
+  const reset=()=>{
+    stopHold();
+    node.style.transform='';
+    node.style.transition='';
+    node.classList.remove('swiping-reply');
+    touch=null;
+  };
+  node.addEventListener('touchstart',event=>{
+    if(event.touches.length!==1 || event.target.closest('button'))return;
+    const finger=event.touches[0];
+    touch={x:finger.clientX,y:finger.clientY,dx:0,cancelled:false,held:false};
+    stopHold();
+    hold=setTimeout(()=>{
+      hold=null;
+      if(touch && !touch.cancelled && Math.abs(touch.dx)<12){
+        touch.held=true;
+        showActions(item,message,node,threadId);
+      }
+    },530);
+  },{passive:true});
+  node.addEventListener('touchmove',event=>{
+    if(!touch || event.touches.length!==1)return;
+    const finger=event.touches[0];
+    const dx=finger.clientX-touch.x,dy=finger.clientY-touch.y;
+    touch.dx=dx;
+    if(touch.held)return;
+    if(Math.abs(dy)>19 || dx>15){touch.cancelled=true;stopHold()}
+    if(Math.abs(dx)>12)stopHold();
+    if(touch.cancelled || Math.abs(dy)>36)return;
+    const slide=Math.min(72,Math.max(0,-dx));
+    if(slide>4){
+      node.style.transition='none';
+      node.style.transform='translateX(-'+slide+'px)';
+      node.classList.add('swiping-reply');
+    }
+  },{passive:true});
+  node.addEventListener('touchend',()=>{
+    if(!touch)return;
+    const swiped=!touch.held && !touch.cancelled && touch.dx<=-62;
+    reset();
+    if(swiped)startReply(item,message,threadId);
+  },{passive:true});
+  node.addEventListener('touchcancel',reset,{passive:true});
+  node.addEventListener('contextmenu',event=>{
+    if(event.target.closest('button'))return;
+    event.preventDefault();
+    showActions(item,message,node,threadId);
+  });
+}
+
 function createQuote(replyTo){
   if(!replyTo || typeof replyTo.id!=='string' || typeof replyTo.text!=='string')return null;
   const q=el('button','reply-quote');q.type='button';
