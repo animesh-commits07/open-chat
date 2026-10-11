@@ -648,4 +648,23 @@ function openChat(id,u){
   );
 }
 $('backToChats').onclick=()=>{clearReply();closeActions();$('appShell').classList.remove('chat-open')};
-$('messageForm').onsubmit=async e=>{e.preventDefault();if(!active||!me)return;const text=clean($('messageInput').value);if(!text)return;const id=active.id, sender=me;$('sendBtn').disabled=true;status('Sending…');try{const sent=await addDoc(collection(db,'threads',id,'messages'),{senderId:sender.uid,text,createdAt:serverTimestamp()});$('messageInput').value='';status('Sent');void notifyRecipient(id,sent.id,sender)}catch(err){status('Send failed: '+err.message)}finally{$('sendBtn').disabled=false}};
+$('messageForm').onsubmit=async event=>{
+  event.preventDefault();
+  if(!active||!me)return;
+  const text=clean($('messageInput').value);
+  if(!text)return;
+  const threadId=active.id,sender=me,chosen=replyDraft?.threadId===active.id?replyDraft:null;
+  const payload={senderId:sender.uid,text,createdAt:serverTimestamp()};
+  if(chosen)payload.replyTo={id:chosen.id,senderId:chosen.senderId,text:chosen.text};
+  $('sendBtn').disabled=true;status('Sending…');
+  try{
+    const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
+    if(active?.id===threadId){
+      $('messageInput').value='';
+      if(chosen && replyDraft===chosen)clearReply();
+      status('Sent');
+    }
+    void notifyRecipient(threadId,sent.id,sender);
+  }catch(error){status('Send failed: '+error.message)}
+  finally{$('sendBtn').disabled=false}
+};
