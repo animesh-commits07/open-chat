@@ -45,70 +45,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Replies may quote only an existing message from this same private thread.
+    // Replies quote only an actual message from the SAME private chat.
     function validReply(threadId) {
       return !('replyTo' in request.resource.data) || (
         request.resource.data.replyTo is map &&
         request.resource.data.replyTo.keys().hasOnly(['id', 'senderId', 'text']) &&
         request.resource.data.replyTo.keys().hasAll(['id', 'senderId', 'text']) &&
         request.resource.data.replyTo.id is string &&
-        request.resource.data.replyTo.id.matches('^[A-Za-z0-9]{20}
-      allow get, list: if signedIn() && request.auth.uid in resource.data.members;
-      allow create: if signedIn() &&
-        request.resource.data.keys().hasOnly(['members', 'updatedAt']) &&
-        request.resource.data.members is list &&
-        request.resource.data.members.size() == 2 &&
-        request.auth.uid in request.resource.data.members &&
-        request.resource.data.members[0] is string &&
-        request.resource.data.members[1] is string &&
-        request.resource.data.members[0] < request.resource.data.members[1] &&
-        threadId == request.resource.data.members[0] + '_' + request.resource.data.members[1] &&
-        exists(/databases/$(database)/documents/users/$(request.resource.data.members[0])) &&
-        exists(/databases/$(database)/documents/users/$(request.resource.data.members[1]));
-      allow update: if signedIn() && request.auth.uid in resource.data.members &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
-      allow delete: if false;
-
-      match /messages/{messageId} {
-        allow get, list: if member(threadId);
-        allow create: if member(threadId) &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
-          validReply(threadId) &&
-          request.resource.data.senderId == request.auth.uid &&
-          request.resource.data.text is string &&
-          request.resource.data.text.size() > 0 &&
-          request.resource.data.text.size() <= 1000;
-        // Only the receiving participant may acknowledge delivery/read.
-        // Never permit changing sender, text or creation time.
-        allow update: if member(threadId) &&
-          request.auth.uid != resource.data.senderId &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'deliveredAt', 'seenAt']) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
-          ('deliveredAt' in request.resource.data) &&
-          request.resource.data.deliveredAt is timestamp &&
-          (
-            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
-            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
-          ) &&
-          (
-            !('seenAt' in request.resource.data) ||
-            (
-              request.resource.data.seenAt is timestamp &&
-              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
-              (
-                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
-                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
-              )
-            )
-          );
-        allow delete: if member(threadId) &&
-          resource.data.senderId == request.auth.uid;
-      }
-    }
-  }
-}
-) &&
+        request.resource.data.replyTo.id.size() == 20 &&
+        request.resource.data.replyTo.id.matches('^[A-Za-z0-9]+$') &&
         request.resource.data.replyTo.senderId is string &&
         request.resource.data.replyTo.text is string &&
         request.resource.data.replyTo.text.size() <= 1000 &&
