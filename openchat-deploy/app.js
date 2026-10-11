@@ -181,6 +181,7 @@ onAuthStateChanged(auth,async u=>{
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
   clearReceiptWatchers();
+  clearReply();closeActions();
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
   $('notificationPrompt').classList.add('hidden');
   $('sessionLoading').classList.remove('hidden');
@@ -584,6 +585,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  clearReply();closeActions();
   active={id,other:u};
   $('chatWelcome').classList.add('hidden');
   $('chatView').classList.remove('hidden');
@@ -605,11 +607,21 @@ function openChat(id,u){
       visibleChatDocuments=messages;
       for(const item of messages){
         const message=item.data(),own=message.senderId===ownUid;
-        const node=el('article','msg'+(own?' own':'')+(isSingleEmojiMessage(message.text)?' emoji-only':''));
+        const node=el('article','msg'+(own?' own':'')+(!message.replyTo && isSingleEmojiMessage(message.text)?' emoji-only':''));
+        node.dataset.messageId=item.id;
+        const quote=createQuote(message.replyTo);
+        if(quote)node.append(quote);
         node.append(el('div','msg-body',message.text));
+        enableReplyGesture(node,item,message,id);
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
         meta.append(el('span',null,when?when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));
+        const replyButton=el('button','reply-trigger','↩');
+        replyButton.type='button';
+        replyButton.title='Reply to this message';
+        replyButton.setAttribute('aria-label','Reply to this message');
+        replyButton.onclick=()=>startReply(item,message,id);
+        meta.append(replyButton);
         if(own){
           const state=outgoingReceiptState(message,!!item.metadata?.hasPendingWrites);
           const ticks=el('span','receipt-ticks receipt-'+state,state==='sending'?'◷':state==='sent'?'✓':'✓✓');
@@ -635,5 +647,5 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async e=>{e.preventDefault();if(!active||!me)return;const text=clean($('messageInput').value);if(!text)return;const id=active.id, sender=me;$('sendBtn').disabled=true;status('Sending…');try{const sent=await addDoc(collection(db,'threads',id,'messages'),{senderId:sender.uid,text,createdAt:serverTimestamp()});$('messageInput').value='';status('Sent');void notifyRecipient(id,sent.id,sender)}catch(err){status('Send failed: '+err.message)}finally{$('sendBtn').disabled=false}};
