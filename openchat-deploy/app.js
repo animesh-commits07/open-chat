@@ -180,6 +180,7 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  clearReceiptWatchers();
   ++searchVersion;++peopleVersion;++threadVersion;users.clear();active=null;threads=[];me=u;myUsername='';view='people';directoryLoading=false;
   $('notificationPrompt').classList.add('hidden');
   $('sessionLoading').classList.remove('hidden');
@@ -229,9 +230,102 @@ function setView(next){
   $('chatsTab').setAttribute('aria-pressed',String(next==='chats'));
   $('allChatsBtn').classList.add('hidden');
 }
+
+const receiptWatchers=new Map();
+const receiptQueue=[],receiptPending=new Map();
+let receiptWorkers=0,visibleChatDocuments=[];
+function receiptKey(threadId,messageId){return threadId+'/'+messageId}
+function isChatActuallyVisible(threadId){
+  return !!me && active?.id===threadId &&
+    !document.hidden && document.hasFocus() &&
+    !$('chatView').classList.contains('hidden') &&
+    (window.innerWidth>700 || $('appShell').classList.contains('chat-open'));
+}
+function requestReceipt(threadId,messageId,recipientUid,seen=false){
+  if(me?.uid!==recipientUid)return;
+  const key=receiptKey(threadId,messageId);
+  const existing=receiptPending.get(key);
+  if(existing){if(seen)existing.seen=true;return}
+  const task={key,threadId,messageId,recipientUid,seen};
+  receiptPending.set(key,task);receiptQueue.push(task);
+  processReceiptQueue();
+}
+function processReceiptQueue(){
+  while(receiptWorkers<4 && receiptQueue.length){
+    const task=receiptQueue.shift();receiptWorkers++;
+    void commitReceipt(task).finally(()=>{
+      receiptWorkers--;receiptPending.delete(task.key);
+      processReceiptQueue();
+    });
+  }
+}
+async function commitReceipt(task){
+  if(me?.uid!==task.recipientUid)return;
+  try{
+    await runTransaction(db,async transaction=>{
+      if(me?.uid!==task.recipientUid)return;
+      const ref=doc(db,'threads',task.threadId,'messages',task.messageId);
+      const snap=await transaction.get(ref);
+      if(!snap.exists())return;
+      const message=snap.data();
+      if(message.senderId===task.recipientUid)return;
+      const updates={};
+      if(!message.deliveredAt)updates.deliveredAt=serverTimestamp();
+      if(task.seen && isChatActuallyVisible(task.threadId) && !message.seenAt){
+        updates.seenAt=serverTimestamp();
+      }
+      if(Object.keys(updates).length)transaction.update(ref,updates);
+    });
+  }catch(error){
+    // A receiver can be offline or a receipt may race another device.
+    // Delivery/read status is never fabricated if the write fails.
+    console.warn('Could not update message receipt:',error);
+  }
+}
+function clearReceiptWatchers(){
+  for(const unsubscribe of receiptWatchers.values())unsubscribe();
+  receiptWatchers.clear();
+  receiptQueue.length=0;receiptPending.clear();
+  visibleChatDocuments=[];
+}
+function syncReceiptWatchers(list){
+  if(!me)return;
+  const ownUid=me.uid,activeIds=new Set(list.map(t=>t.id));
+  for(const [id,unsubscribe] of receiptWatchers){
+    if(!activeIds.has(id)){unsubscribe();receiptWatchers.delete(id)}
+  }
+  for(const thread of list){
+    if(!thread?.members?.includes(ownUid)||receiptWatchers.has(thread.id))continue;
+    const messages=query(collection(db,'threads',thread.id,'messages'),orderBy('createdAt','desc'),limit(80));
+    const unsubscribe=onSnapshot(messages,{includeMetadataChanges:true},snapshot=>{
+      if(me?.uid!==ownUid || snapshot.metadata.fromCache)return;
+      for(const item of snapshot.docs){
+        const message=item.data();
+        if(message.senderId!==ownUid && !message.deliveredAt){
+          requestReceipt(thread.id,item.id,ownUid,false);
+        }
+      }
+    },error=>console.warn('Could not sync deliveries:',error));
+    receiptWatchers.set(thread.id,unsubscribe);
+  }
+}
+function markVisibleChatSeen(){
+  if(!active || !isChatActuallyVisible(active.id)||!me)return;
+  for(const item of visibleChatDocuments){
+    const message=item.data();
+    if(message.senderId!==me.uid && !message.seenAt && !item.metadata?.hasPendingWrites){
+      requestReceipt(active.id,item.id,me.uid,true);
+    }
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)markVisibleChatSeen()});
+window.addEventListener('focus',markVisibleChatSeen);
+window.addEventListener('pageshow',markVisibleChatSeen);
+
 function watchThreads(){
   stopThreads=onSnapshot(query(collection(db,'threads'),where('members','array-contains',me.uid)),snap=>{
     threads=snap.docs.map(d=>({id:d.id,...d.data()}));
+    syncReceiptWatchers(threads);
     if(view==='chats')renderThreads();
   },e=>{if(view==='chats')$('emptyList').textContent='Could not load chats: '+e.message;});
 }
@@ -341,6 +435,58 @@ $('searchInput').oninput=()=>{
   },250);
 };
 async function startChat(u){try{const id=pair(me.uid,u.uid);await setDoc(doc(db,'threads',id),{members:[me.uid,u.uid].sort(),updatedAt:serverTimestamp()},{merge:true});openChat(id,u)}catch(e){alert('Could not create chat: '+e.message)}}
-function openChat(id,u){if(stopMessages)stopMessages();active={id,other:u};$('chatWelcome').classList.add('hidden');$('chatView').classList.remove('hidden');$('appShell').classList.add('chat-open');$('chatName').textContent='@'+(u.username||'user');$('chatAvatar').textContent=initials(u.username);$('messages').replaceChildren();status('Loading messages…');stopMessages=onSnapshot(query(collection(db,'threads',id,'messages'),orderBy('createdAt','desc'),limit(300)),snap=>{const container=$('messages');container.replaceChildren();const arr=snap.docs.slice().reverse();for(const item of arr){const m=item.data(),own=m.senderId===me.uid;const node=el('article','msg'+(own?' own':''));node.append(el('div','msg-body',m.text));const meta=el('div','msg-meta');const d=m.createdAt?.toDate?.();meta.append(el('span',null,d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));if(own){const del=el('button','delete-msg','🗑');del.title='Delete message';del.onclick=async()=>{if(confirm('Delete this message?'))try{await deleteDoc(doc(db,'threads',id,'messages',item.id))}catch(e){status(e.message)}};meta.append(del)}node.append(meta);container.append(node)}container.scrollTop=container.scrollHeight;status('Private chat • latest 300 messages')},e=>status('Could not load messages: '+e.message))}
+function openChat(id,u){
+  if(stopMessages)stopMessages();
+  active={id,other:u};
+  $('chatWelcome').classList.add('hidden');
+  $('chatView').classList.remove('hidden');
+  $('appShell').classList.add('chat-open');
+  $('chatName').textContent='@'+(u.username||'user');
+  $('chatAvatar').textContent=initials(u.username);
+  $('messages').replaceChildren();
+  visibleChatDocuments=[];
+  status('Loading messages…');
+  const ownUid=me.uid;
+  stopMessages=onSnapshot(
+    query(collection(db,'threads',id,'messages'),orderBy('createdAt','desc'),limit(300)),
+    {includeMetadataChanges:true},
+    snapshot=>{
+      if(me?.uid!==ownUid || active?.id!==id)return;
+      const container=$('messages');
+      container.replaceChildren();
+      const messages=snapshot.docs.slice().reverse();
+      visibleChatDocuments=messages;
+      for(const item of messages){
+        const message=item.data(),own=message.senderId===ownUid;
+        const node=el('article','msg'+(own?' own':''));
+        node.append(el('div','msg-body',message.text));
+        const meta=el('div','msg-meta');
+        const when=message.createdAt?.toDate?.();
+        meta.append(el('span',null,when?when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));
+        if(own){
+          const state=message.seenAt?'seen':message.deliveredAt?'delivered':item.metadata?.hasPendingWrites?'sending':'sent';
+          const ticks=el('span','receipt-ticks receipt-'+state,state==='sending'?'◷':state==='sent'?'✓':'✓✓');
+          const label={sending:'Sending',sent:'Sent',delivered:'Delivered',seen:'Seen'}[state];
+          ticks.title=label;ticks.setAttribute('role','img');ticks.setAttribute('aria-label',label);
+          meta.append(ticks);
+          const del=el('button','delete-msg','🗑');
+          del.title='Delete message';
+          del.onclick=async()=>{
+            if(confirm('Delete this message?')){
+              try{await deleteDoc(doc(db,'threads',id,'messages',item.id))}
+              catch(error){status(error.message)}
+            }
+          };
+          meta.append(del);
+        }
+        node.append(meta);container.append(node);
+      }
+      container.scrollTop=container.scrollHeight;
+      if(!snapshot.metadata.fromCache)markVisibleChatSeen();
+      status('Private chat • latest 300 messages');
+    },
+    error=>status('Could not load messages: '+error.message)
+  );
+}
 $('backToChats').onclick=()=>{$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async e=>{e.preventDefault();if(!active||!me)return;const text=clean($('messageInput').value);if(!text)return;const id=active.id, sender=me;$('sendBtn').disabled=true;status('Sending…');try{const sent=await addDoc(collection(db,'threads',id,'messages'),{senderId:sender.uid,text,createdAt:serverTimestamp()});$('messageInput').value='';status('Sent');void notifyRecipient(id,sent.id,sender)}catch(err){status('Send failed: '+err.message)}finally{$('sendBtn').disabled=false}};
