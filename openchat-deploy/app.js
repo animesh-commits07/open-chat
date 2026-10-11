@@ -234,10 +234,13 @@ function setView(next){
 const receiptWatchers=new Map();
 const receiptQueue=[],receiptPending=new Map();
 let receiptWorkers=0,visibleChatDocuments=[];
+function outgoingReceiptState(message,pending=false){
+  return message.seenAt?'seen':message.deliveredAt?'delivered':pending?'sending':'sent';
+}
 function receiptKey(threadId,messageId){return threadId+'/'+messageId}
 function isChatActuallyVisible(threadId){
   return !!me && active?.id===threadId &&
-    !document.hidden && document.hasFocus() &&
+    !document.hidden && (navigator.maxTouchPoints>0 || document.hasFocus()) &&
     !$('chatView').classList.contains('hidden') &&
     (window.innerWidth>700 || $('appShell').classList.contains('chat-open'));
 }
@@ -464,7 +467,7 @@ function openChat(id,u){
         const when=message.createdAt?.toDate?.();
         meta.append(el('span',null,when?when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));
         if(own){
-          const state=message.seenAt?'seen':message.deliveredAt?'delivered':item.metadata?.hasPendingWrites?'sending':'sent';
+          const state=outgoingReceiptState(message,!!item.metadata?.hasPendingWrites);
           const ticks=el('span','receipt-ticks receipt-'+state,state==='sending'?'◷':state==='sent'?'✓':'✓✓');
           const label={sending:'Sending',sent:'Sent',delivered:'Delivered',seen:'Seen'}[state];
           ticks.title=label;ticks.setAttribute('role','img');ticks.setAttribute('aria-label',label);
