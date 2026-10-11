@@ -376,10 +376,21 @@ function renderTypingPresence(){
   if(label.textContent!==text)label.textContent=text;
   label.classList.toggle('is-typing',isFresh);
 }
+function scheduleRemoteTypingExpiry(){
+  if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
+  typingExpiryTimer=null;
+  if(!remoteTyping.active || !remoteTyping.updatedAt)return;
+  const remaining=remoteTyping.updatedAt+TYPING_EXPIRE_MS-Date.now();
+  if(remaining<=0)return;
+  typingExpiryTimer=setTimeout(()=>{
+    typingExpiryTimer=null;
+    renderTypingPresence();
+  },Math.min(TYPING_EXPIRE_MS,remaining));
+}
 function closeTypingSession(){
   stopOwnTyping();
   if(typingUnsubscribe){typingUnsubscribe();typingUnsubscribe=null}
-  if(typingExpiryTimer!==null)clearInterval(typingExpiryTimer);
+  if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
   typingExpiryTimer=null;
   remoteTyping={active:false,updatedAt:0};
   renderTypingPresence();
@@ -398,14 +409,15 @@ function watchOtherTyping(threadId,otherUid){
         updatedAt:data?.updatedAt?.toMillis?.()||0
       };
       renderTypingPresence();
+      scheduleRemoteTypingExpiry();
     },
     error=>{
       console.warn('Could not watch typing status:',error);
       remoteTyping={active:false,updatedAt:0};
       renderTypingPresence();
+      scheduleRemoteTypingExpiry();
     }
   );
-  typingExpiryTimer=setInterval(renderTypingPresence,1000);
 }
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden)stopOwnTyping();
