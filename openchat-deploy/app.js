@@ -386,7 +386,7 @@ function renderTypingPresence(){
   if(label.textContent!==text)label.textContent=text;
   label.classList.toggle('is-typing',isFresh);
   label.classList.toggle('is-error',!isFresh && error);
-  $('chatTypingBubble').classList.toggle('hidden',!isFresh || document.hidden);
+  $('chatTypingBubble')?.classList.toggle('hidden',!isFresh || document.hidden);
 }
 function scheduleRemoteTypingExpiry(){
   if(typingExpiryTimer!==null)clearTimeout(typingExpiryTimer);
