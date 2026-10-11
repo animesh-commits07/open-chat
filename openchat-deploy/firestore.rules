@@ -107,7 +107,7 @@ service cloud.firestore {
         // Never permit changing sender, text or creation time.
         allow update: if member(threadId) &&
           request.auth.uid != resource.data.senderId &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'deliveredAt', 'seenAt']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
           ('deliveredAt' in request.resource.data) &&
@@ -127,6 +127,22 @@ service cloud.firestore {
               )
             )
           );
+        // Only the author can edit the message text during the first 15 minutes.
+        // The server controls editedAt, and all other fields stay unchanged,
+        // including author, original timestamp, reply, and delivery/read ticks.
+        allow update: if member(threadId) &&
+          request.auth.uid == resource.data.senderId &&
+          resource.data.createdAt is timestamp &&
+          request.time >= resource.data.createdAt &&
+          request.time - resource.data.createdAt < duration.value(15, 'm') &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          request.resource.data.text != resource.data.text &&
+          request.resource.data.editedAt == request.time;
         allow delete: if member(threadId) &&
           resource.data.senderId == request.auth.uid;
       }
