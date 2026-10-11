@@ -177,3 +177,7 @@
 .msg .edited-mark{font-size:10px;color:#b4d0c5;white-space:nowrap;opacity:.9}
 .msg.own .edited-mark{color:#d8e8df}
 @media(max-width:700px){.edit-composer{min-height:59px;padding:8px 10px;margin-bottom:7px}}
+
+.msg .edit-msg{border:0;background:transparent;padding:1px 3px;color:#dcf7e8;opacity:.85;font-size:15px;line-height:1.4;border-radius:5px}
+.msg .edit-msg:hover{background:rgba(255,255,255,.14);opacity:1}
+.msg .edit-msg:focus-visible{outline:2px solid var(--green);outline-offset:2px}
