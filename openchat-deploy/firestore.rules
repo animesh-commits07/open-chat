@@ -102,7 +102,9 @@ service cloud.firestore {
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() > 0 &&
-          request.resource.data.text.size() <= 1000;
+          request.resource.data.text.size() <= 1000 &&
+          // Use a server-issued send time, not a user-controlled timestamp.
+          request.resource.data.createdAt == request.time;
         // Only the receiving participant may acknowledge delivery/read.
         // Never permit changing sender, text or creation time.
         allow update: if member(threadId) &&
