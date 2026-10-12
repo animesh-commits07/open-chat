@@ -6,6 +6,7 @@ import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
 import {createLiveDoodleController} from './live-doodle.js?v=doodle-screen-20261012';
 import {createAnimatedMessagesController} from './animated-messages.js?v=animated-messages-20261012';
+import {createMessageEffectsController} from './message-effects.js?v=click-play-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -17,6 +18,13 @@ const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=nul
 // One-time visual message effects are chosen in the existing composer.
 // No effect is sent by default; old messages remain compatible.
 const animatedMessages=createAnimatedMessagesController();
+// The existing composer still stores an optional effect choice on each
+// message. Actual playback waits until a user taps that message's Animate
+// control, then both friends receive the same private Firestore signal.
+const messageEffects=createMessageEffectsController({db,
+  getContext:()=>me&&active?{threadId:active.id,uid:me.uid}:null,
+  onStatus:message=>status(message)
+});
 // Tic-Tac-Toe is isolated from messaging, push, reactions and typing.
 // The controller is active only for the current two-person conversation.
 const ticTacToe=createTicTacToeController({db,getContext:()=>
@@ -212,6 +220,7 @@ onAuthStateChanged(auth,async u=>{
   quickQuiz.close();
   liveDoodle.close();
   animatedMessages.endChat();
+  messageEffects.close();
   stopOwnPresence();
   stopFriendPresence();
   stopEditing(false);
@@ -1400,6 +1409,7 @@ function openChat(id,u){
   quickQuiz.close();
   liveDoodle.close();
   animatedMessages.beginChat(id);
+  messageEffects.close();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1418,6 +1428,7 @@ function openChat(id,u){
   // Read-only doodle marks are visible over messages without entering draw
   // mode; touching the pen button enables canvas pointer capture.
   liveDoodle.connect(id,me.uid,u.uid,u.username);
+  messageEffects.open(id,me.uid);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -1428,7 +1439,7 @@ function openChat(id,u){
     snapshot=>{
       if(me?.uid!==ownUid || active?.id!==id)return;
       const container=$('messages');
-      const animatedArrivals=animatedMessages.observeSnapshot(snapshot);
+      messageEffects.beforeMessagesRender();
       // Reactions use the same message stream. Preserve scroll position
       // on a reaction/edit update rather than jumping to the newest message.
       const atBottom=container.scrollHeight-container.scrollTop-container.clientHeight<96;
@@ -1486,8 +1497,8 @@ function openChat(id,u){
           };
           meta.append(del);
         }
+        messageEffects.decorate(meta,node,item,message);
         node.append(meta);
-        animatedMessages.decorateMessage(node,message,animatedArrivals.has(item.id),item.id);
         container.append(node);
       }
       container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
@@ -1497,7 +1508,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();animatedMessages.endChat();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();animatedMessages.endChat();messageEffects.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
