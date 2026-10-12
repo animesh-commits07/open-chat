@@ -1511,6 +1511,7 @@ $('messageForm').onsubmit=async event=>{
   if(chosen)payload.replyTo={id:chosen.id,senderId:chosen.senderId,text:chosen.text};
   stopOwnTyping();
   $('sendBtn').disabled=true;status('Sending…');
+  animatedMessages.clearSendError();
   try{
     const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
     if(active?.id===threadId){
@@ -1520,6 +1521,9 @@ $('messageForm').onsubmit=async event=>{
       status('Sent');
     }
     void notifyRecipient(threadId,sent.id,sender);
-  }catch(error){status('Send failed: '+error.message)}
+  }catch(error){
+    if(chosenEffect)animatedMessages.showSendError(error);
+    status('Send failed: '+error.message);
+  }
   finally{$('sendBtn').disabled=false}
 };
