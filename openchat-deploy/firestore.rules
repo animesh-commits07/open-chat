@@ -20,6 +20,36 @@ service cloud.firestore {
         request.auth.uid in get(/databases/$(database)/documents/threads/$(threadId)).data.members;
     }
 
+    // Presence is a heartbeat, not a permanent "online" flag. A friend
+    // checks its server timestamp and considers it stale after 105 seconds.
+    // Presence is visible only to participants in an EXISTING private thread.
+    function privateThreadId(uid) {
+      return request.auth.uid < uid
+        ? request.auth.uid + '_' + uid
+        : uid + '_' + request.auth.uid;
+    }
+    function canSeePresence(uid) {
+      let id = privateThreadId(uid);
+      return request.auth.uid == uid ||
+        (
+          exists(/databases/$(database)/documents/threads/$(id)) &&
+          get(/databases/$(database)/documents/threads/$(id)).data.members is list &&
+          get(/databases/$(database)/documents/threads/$(id)).data.members.hasAll([request.auth.uid, uid])
+        );
+    }
+    match /presence/{uid} {
+      allow get: if signedIn() && canSeePresence(uid);
+      allow list: if false;
+      // A member controls only their own timestamp, issued by Firestore.
+      // Nothing here authorizes reads of a user's profile or chat messages.
+      allow create, update: if signedIn() &&
+        request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['lastActiveAt']) &&
+        request.resource.data.keys().hasAll(['lastActiveAt']) &&
+        request.resource.data.lastActiveAt == request.time;
+      allow delete: if false;
+    }
+
     // Public directory contains only the handle and its user's UID, not email.
     match /handles/{username} {
       allow get, list: if signedIn();

@@ -170,6 +170,7 @@ async function enterApp(){
   $('searchInput').value='';
   $('authPage').classList.add('hidden');$('usernamePage').classList.add('hidden');$('appShell').classList.remove('hidden');
   view='people';showPeople('');watchThreads();updatePushButton();
+  startOwnPresence();
   void resumePushIfEnabled(me);void openNotificationChat();
 }
 $('usernameLogout').onclick=signOutWithPushCleanup;
@@ -180,6 +181,8 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  stopOwnPresence();
+  stopFriendPresence();
   stopEditing(false);
   closeTypingSession();
   clearReceiptWatchers();
@@ -328,6 +331,134 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)markVisibl
 window.addEventListener('focus',markVisibleChatSeen);
 window.addEventListener('pageshow',markVisibleChatSeen);
 
+// Private Online / Last Seen: a server-timestamp heartbeat is refreshed only
+// while a signed-in member has the site visible. Never broadcast private text.
+// No online:false writes on tab close: a second logged-in tab/device can still
+// be active. Remote clients expire the heartbeat automatically after 105s.
+const PRESENCE_HEARTBEAT_MS=45000;
+const PRESENCE_ONLINE_MS=105000;
+const PRESENCE_RENDER_MS=15000;
+const PRESENCE_PERMISSION_RETRY_MS=180000;
+let ownPresenceUid=null,ownPresenceTimer=null,ownPresenceRetryAfter=0,ownPresenceLastAttempt=0;
+let ownPresencePermissionError=false;
+const presenceWritesInProgress=new Set();
+let stopPeerPresence=null,peerPresenceRefreshTimer=null;
+let peerPresence={lastActiveMs:0,loaded:false,error:''};
+
+function stopOwnPresence(){
+  if(ownPresenceTimer!==null)clearInterval(ownPresenceTimer);
+  ownPresenceTimer=null;
+  ownPresenceUid=null;
+  ownPresenceRetryAfter=0;
+  ownPresenceLastAttempt=0;
+  ownPresencePermissionError=false;
+}
+async function writeOwnPresence(uid){
+  if(!me || me.uid!==uid || ownPresenceUid!==uid || document.hidden ||
+     presenceWritesInProgress.has(uid) || Date.now()<ownPresenceRetryAfter ||
+     Date.now()-ownPresenceLastAttempt<10000)return;
+  ownPresenceLastAttempt=Date.now();
+  presenceWritesInProgress.add(uid);
+  try{
+    await setDoc(doc(db,'presence',uid),{lastActiveAt:serverTimestamp()});
+    if(ownPresenceUid===uid && me?.uid===uid){
+      ownPresencePermissionError=false;
+      ownPresenceRetryAfter=0;
+      if(active)renderTypingPresence();
+    }
+  }catch(error){
+    console.warn('Online presence write unavailable:',error?.code||error?.message);
+    if(ownPresenceUid===uid && me?.uid===uid){
+      ownPresencePermissionError=error?.code==='permission-denied';
+      // Avoid continuous denied writes while Firebase console rules are old.
+      ownPresenceRetryAfter=Date.now()+PRESENCE_PERMISSION_RETRY_MS;
+      if(active)renderTypingPresence();
+    }
+  }finally{
+    presenceWritesInProgress.delete(uid);
+  }
+}
+function startOwnPresence(){
+  stopOwnPresence();
+  if(!me || !myUsername)return;
+  ownPresenceUid=me.uid;
+  const uid=me.uid;
+  if(!document.hidden)void writeOwnPresence(uid);
+  ownPresenceTimer=setInterval(()=>{
+    if(ownPresenceUid===uid && !document.hidden)void writeOwnPresence(uid);
+  },PRESENCE_HEARTBEAT_MS);
+}
+function resumeOwnPresence(){
+  if(ownPresenceUid && !document.hidden)void writeOwnPresence(ownPresenceUid);
+}
+document.addEventListener('visibilitychange',resumeOwnPresence);
+window.addEventListener('pageshow',resumeOwnPresence);
+window.addEventListener('focus',resumeOwnPresence);
+
+function stopFriendPresence(){
+  if(stopPeerPresence){stopPeerPresence();stopPeerPresence=null}
+  if(peerPresenceRefreshTimer!==null)clearInterval(peerPresenceRefreshTimer);
+  peerPresenceRefreshTimer=null;
+  peerPresence={lastActiveMs:0,loaded:false,error:''};
+}
+function watchFriendPresence(threadId,friendUid){
+  stopFriendPresence();
+  peerPresenceRefreshTimer=setInterval(()=>{
+    if(active?.id!==threadId || active?.other?.uid!==friendUid){
+      stopFriendPresence();return;
+    }
+    renderTypingPresence();
+  },PRESENCE_RENDER_MS);
+  stopPeerPresence=onSnapshot(
+    doc(db,'presence',friendUid),
+    {includeMetadataChanges:true},
+    snapshot=>{
+      if(!me || active?.id!==threadId || active?.other?.uid!==friendUid)return;
+      // Don't claim somebody is online from an unverified local cache.
+      if(snapshot.metadata.fromCache)return;
+      peerPresence={
+        lastActiveMs:snapshot.data()?.lastActiveAt?.toMillis?.()||0,
+        loaded:true,error:''
+      };
+      renderTypingPresence();
+    },
+    error=>{
+      if(!me || active?.id!==threadId || active?.other?.uid!==friendUid)return;
+      console.warn('Online presence read unavailable:',error?.code||error?.message);
+      peerPresence={lastActiveMs:0,loaded:false,error:error?.code||'unknown'};
+      renderTypingPresence();
+    }
+  );
+}
+function friendIsOnline(now=Date.now()){
+  return peerPresence.loaded && !peerPresence.error &&
+    peerPresence.lastActiveMs>0 &&
+    peerPresence.lastActiveMs<=now+30000 &&
+    now-peerPresence.lastActiveMs<PRESENCE_ONLINE_MS;
+}
+function formatFriendLastSeen(ms,now=Date.now()){
+  if(!Number.isFinite(ms) || ms<=0 || ms>now+30000)return 'Last seen unavailable';
+  const when=new Date(ms),today=new Date(now);
+  const date=when.toDateString(),todayDate=today.toDateString();
+  const yesterday=new Date(today.getFullYear(),today.getMonth(),today.getDate()-1);
+  const clock=when.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+  if(date===todayDate)return 'Last seen today at '+clock;
+  if(date===yesterday.toDateString())return 'Last seen yesterday at '+clock;
+  return 'Last seen '+when.toLocaleDateString([],{day:'numeric',month:'short',year:'numeric'})+' at '+clock;
+}
+function friendPresenceText(){
+  if(ownPresencePermissionError)return 'Online status unavailable · publish Firebase Rules';
+  if(peerPresence.error==='permission-denied')return 'Online status unavailable · publish Firebase Rules';
+  if(peerPresence.error)return 'Online status unavailable';
+  if(!peerPresence.loaded){
+    return navigator.onLine===false?'Online status unavailable · reconnect':'Checking online status…';
+  }
+  if(friendIsOnline())return 'Online';
+  return peerPresence.lastActiveMs>0
+    ?formatFriendLastSeen(peerPresence.lastActiveMs)
+    :'Offline · last seen unavailable';
+}
+
 // Typing presence never stores draft text. Writes are throttled to one
 // heartbeat per 4 seconds and stop after 2.8 seconds of inactivity.
 // On-demand diagnostic: explicit Firestore read and write checks, no Cloudflare calls.
@@ -473,11 +604,16 @@ function renderTypingPresence(){
   const label=$('chatPresence');
   const isFresh=remoteTyping.active && remoteTyping.updatedAt>0 &&
     Date.now()-remoteTyping.updatedAt<TYPING_EXPIRE_MS;
-  const error=typingReadError||typingWriteError;
-  const text=isFresh?'typing…':error?'Typing unavailable · check Firestore Rules':'Private one-to-one chat';
+  const typingError=typingReadError||typingWriteError;
+  // Typing stays the highest priority; unread/edit/reply state is untouched.
+  const text=isFresh?'typing…'
+    :typingError?'Typing unavailable · check Firestore Rules'
+    :friendPresenceText();
   if(label.textContent!==text)label.textContent=text;
   label.classList.toggle('is-typing',isFresh);
-  label.classList.toggle('is-error',!isFresh && error);
+  label.classList.toggle('is-online',!isFresh && !typingError && friendIsOnline() && !ownPresencePermissionError);
+  label.classList.toggle('is-error',!isFresh &&
+    (typingError || ownPresencePermissionError || !!peerPresence.error));
   $('chatTypingBubble')?.classList.toggle('hidden',!isFresh || document.hidden);
 }
 function scheduleRemoteTypingExpiry(){
@@ -1227,6 +1363,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  stopFriendPresence();
   clearReactionSaveError();
   stopEditing(false);
   closeTypingSession();
@@ -1238,6 +1375,7 @@ function openChat(id,u){
   $('chatName').textContent='@'+(u.username||'user');
   $('chatAvatar').textContent=initials(u.username);
   watchOtherTyping(id,u.uid);
+  watchFriendPresence(id,u.uid);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -1314,7 +1452,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{stopEditing(false);closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
