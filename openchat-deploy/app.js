@@ -3,6 +3,7 @@ import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirec
 import {getFirestore,doc,FieldPath,deleteField,setDoc,updateDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=game-20261012';
+import {createQuickQuizController} from './quick-quiz.js?v=quiz-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -16,6 +17,11 @@ const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=nul
 const ticTacToe=createTicTacToeController({db,getContext:()=>
   me && active?{threadId:active.id,uid:me.uid,friendUid:active.other.uid}:null
 });
+// Quick Quiz is separate from the existing Tic-Tac-Toe invitation state.
+const quickQuiz=createQuickQuizController({db,getContext:()=>
+  me && active?{threadId:active.id,uid:me.uid,friendUid:active.other.uid}:null
+});
+$('gameToggleBtn').addEventListener('click',()=>quickQuiz.close());
 
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
@@ -189,6 +195,7 @@ onAuthStateChanged(auth,async u=>{
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
   ticTacToe.close();
+  quickQuiz.close();
   stopOwnPresence();
   stopFriendPresence();
   stopEditing(false);
@@ -1371,6 +1378,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   ticTacToe.close();
+  quickQuiz.close();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1462,7 +1470,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{ticTacToe.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
