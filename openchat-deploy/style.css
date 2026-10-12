@@ -510,14 +510,14 @@
 .message-effect-menu .message-effect-search{grid-column:1/-1}
 .message-effect-choice{line-height:1.35;white-space:normal}
 .chat-fx-scene{position:absolute;z-index:24;left:50%;top:50%;width:0;height:0;pointer-events:none;overflow:visible;isolation:isolate}
-.chat-fx-particle{position:absolute;display:block;top:0;left:0;line-height:1;white-space:nowrap;font-size:var(--fx-size,24px);opacity:0;transform:translate(-50%,-50%) scale(.25);transform-origin:center;filter:drop-shadow(0 3px 7px rgba(0,0,0,.22));animation:chat-fx-explode 1850ms cubic-bezier(.19,.7,.25,1) var(--fx-delay,0ms) both}
-.chat-fx-motion-float .chat-fx-particle,.chat-fx-motion-rise .chat-fx-particle{animation-name:chat-fx-float;animation-duration:1950ms}
-.chat-fx-motion-fall .chat-fx-particle{animation-name:chat-fx-fall;animation-duration:2000ms}
-.chat-fx-motion-orbit .chat-fx-particle,.chat-fx-motion-flutter .chat-fx-particle{animation-name:chat-fx-orbit;animation-duration:1950ms}
+.chat-fx-particle{position:absolute;display:block;top:0;left:0;line-height:1;white-space:nowrap;font-size:var(--fx-size,24px);opacity:0;transform:translate(-50%,-50%) scale(.25);transform-origin:center;filter:drop-shadow(0 3px 7px rgba(0,0,0,.22));animation:chat-fx-explode 850ms cubic-bezier(.19,.7,.25,1) var(--fx-delay,0ms) both}
+.chat-fx-motion-float .chat-fx-particle,.chat-fx-motion-rise .chat-fx-particle{animation-name:chat-fx-float;animation-duration:900ms}
+.chat-fx-motion-fall .chat-fx-particle{animation-name:chat-fx-fall;animation-duration:900ms}
+.chat-fx-motion-orbit .chat-fx-particle,.chat-fx-motion-flutter .chat-fx-particle{animation-name:chat-fx-orbit;animation-duration:900ms}
 .chat-fx-motion-arc .chat-fx-particle{animation-name:chat-fx-arc}
 .chat-fx-motion-shoot .chat-fx-particle{animation-name:chat-fx-shoot}
-.chat-fx-motion-wave .chat-fx-particle{animation-name:chat-fx-wave;animation-duration:1850ms}
-.chat-fx-motion-flash .chat-fx-particle,.chat-fx-motion-pulse .chat-fx-particle,.chat-fx-motion-glow .chat-fx-particle{animation-name:chat-fx-glow;animation-duration:1600ms}
+.chat-fx-motion-wave .chat-fx-particle{animation-name:chat-fx-wave;animation-duration:850ms}
+.chat-fx-motion-flash .chat-fx-particle,.chat-fx-motion-pulse .chat-fx-particle,.chat-fx-motion-glow .chat-fx-particle{animation-name:chat-fx-glow;animation-duration:850ms}
 .chat-fx-fireworks .chat-fx-particle,.chat-fx-meteors .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(255,207,99,.9))}
 .chat-fx-sparkles .chat-fx-particle,.chat-fx-magic .chat-fx-particle,.chat-fx-diamonds .chat-fx-particle,.chat-fx-stars .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(255,252,173,.85))}
 .chat-fx-hearts .chat-fx-particle,.chat-fx-cherry .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(255,131,177,.58))}

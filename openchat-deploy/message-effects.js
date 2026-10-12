@@ -2,7 +2,7 @@ import {
   collection,doc,onSnapshot,orderBy,query,limit,setDoc,serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {ANIMATED_MESSAGE_EFFECTS,validAnimatedMessageEffect}
-  from './animated-messages.js?v=auto-fx-28-20261012';
+  from './animated-messages.js?v=manual-fx-29-20261012';
 
 // A single validated signal document replays an effect around ONE chat
 // message on both devices. Never changes message text, reactions, reply,
@@ -28,8 +28,7 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
     for(const timer of revealTimers)clearTimeout(timer);
     revealTimers.clear();
   }
-  // Both automatic arrival and manual replay share the same high-quality
-  // effect renderer, so every effect looks identical on both devices.
+  // One click produces the same server-confirmed animation on BOTH phones.
   function play(messageId,effect){
     if(!current()||!EFFECT_NAMES.has(effect))return false;
     return !!onPlay?.(messageId,effect);
@@ -142,44 +141,36 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
       }
     }finally{writes.delete(messageId)}
   }
+  // Only messages that were explicitly sent WITH a selected animation
+  // receive an Animate button. It appears about one second after the
+  // Firestore-issued send timestamp, never on an unsaved local draft.
+  // Clicking it fires a private replay event; nothing plays on Send.
   function decorate(meta,node,item,message){
-    if(!current()||!item||!message||item.metadata?.hasPendingWrites)return;
+    if(!current()||!item||!message||item.metadata?.hasPendingWrites||
+       !validAnimatedMessageEffect(message.effect))return;
     const timestamp=message.createdAt?.toMillis?.();
-    if(!Number.isFinite(timestamp))return;
-    const messageId=item.id,original=context;
+    if(!Number.isFinite(timestamp)||!/^[A-Za-z0-9]{20}$/.test(item.id))return;
+    const original=context,messageId=item.id,effect=message.effect;
     const button=document.createElement('button');
     button.type='button';
     button.className='effect-trigger';
     button.textContent='✨ Animate';
-    const action=validAnimatedMessageEffect(message.effect)?'Replay':'Animate';
-    button.title=action+' this message for both friends';
-    button.setAttribute('aria-label',action+' message for both friends');
+    button.title='Play '+ANIMATED_MESSAGE_EFFECTS[effect].label+
+      ' around this message on BOTH phones';
+    button.setAttribute('aria-label',button.title);
+    button.onclick=()=>{
+      if(!current()||context!==original||writes.has(messageId))return;
+      dismiss();
+      void trigger(messageId,effect);
+    };
     const remaining=Math.max(0,timestamp+1000-Date.now());
-    const options=document.createElement('button');
-    options.type='button';
-    options.className='message-effect-more';
-    options.textContent='▾';
-    options.title='Choose another animation';
-    options.setAttribute('aria-label','Choose from 28 animations');
-    // Reuse the effect selected before sending when available; ordinary
-    // messages default to Confetti. Either participant can replay it.
-    const preset=EFFECT_NAMES.has(message.effect)?message.effect:'confetti';
-    button.textContent=(MESSAGE_EFFECTS.find(x=>x.id===preset)?.emoji||'✨')+
-      (validAnimatedMessageEffect(message.effect)?' Replay':' Animate');
-    button.onclick=()=>{dismiss();void trigger(messageId,preset)};
-    options.onclick=()=>showChoices(node,messageId);
-    if(remaining>0){
-      button.classList.add('hidden');
-      options.classList.add('hidden');
-    }
-    meta.append(button,options);
+    if(remaining>0)button.classList.add('hidden');
+    meta.append(button);
     if(remaining>0){
       const timer=setTimeout(()=>{
         revealTimers.delete(timer);
-        if(context===original&&current()&&node.isConnected){
+        if(context===original&&current()&&node.isConnected)
           button.classList.remove('hidden');
-          options.classList.remove('hidden');
-        }
       },remaining+30);
       revealTimers.add(timer);
     }
