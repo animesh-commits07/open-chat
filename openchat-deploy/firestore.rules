@@ -110,6 +110,119 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
       allow delete: if false;
 
+      // One private Tic-Tac-Toe match per conversation (games/current).
+      // Its fixed path prevents unbounded game invitation documents.
+      // Only conversation members may inspect or change the match.
+      function gameFields() {
+        return ['xUid','oUid','board','turn','state','winner','createdAt','updatedAt'];
+      }
+      function newGameInvitation(threadId) {
+        let data = request.resource.data;
+        let participants = get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+        return data.keys().hasOnly(gameFields()) &&
+          data.keys().hasAll(gameFields()) &&
+          data.xUid == request.auth.uid &&
+          data.xUid is string && data.oUid is string &&
+          data.xUid != data.oUid &&
+          participants.hasAll([data.xUid,data.oUid]) &&
+          data.board == ['', '', '', '', '', '', '', '', ''] &&
+          data.turn == 'X' &&
+          data.state == 'invited' &&
+          data.winner == '' &&
+          data.createdAt == request.time &&
+          data.updatedAt == request.time;
+      }
+      function gameWinner(b, symbol) {
+        return (b[0]==symbol && b[1]==symbol && b[2]==symbol) ||
+          (b[3]==symbol && b[4]==symbol && b[5]==symbol) ||
+          (b[6]==symbol && b[7]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[3]==symbol && b[6]==symbol) ||
+          (b[1]==symbol && b[4]==symbol && b[7]==symbol) ||
+          (b[2]==symbol && b[5]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[4]==symbol && b[8]==symbol) ||
+          (b[2]==symbol && b[4]==symbol && b[6]==symbol);
+      }
+      function gameChangedCells(before, after) {
+        return (before[0]==after[0] ? 0 : 1) +
+          (before[1]==after[1] ? 0 : 1) +
+          (before[2]==after[2] ? 0 : 1) +
+          (before[3]==after[3] ? 0 : 1) +
+          (before[4]==after[4] ? 0 : 1) +
+          (before[5]==after[5] ? 0 : 1) +
+          (before[6]==after[6] ? 0 : 1) +
+          (before[7]==after[7] ? 0 : 1) +
+          (before[8]==after[8] ? 0 : 1);
+      }
+      function gameAddsOnlyOwnMark(before, after, mark) {
+        return (before[0]==after[0] || (before[0]=='' && after[0]==mark)) &&
+          (before[1]==after[1] || (before[1]=='' && after[1]==mark)) &&
+          (before[2]==after[2] || (before[2]=='' && after[2]==mark)) &&
+          (before[3]==after[3] || (before[3]=='' && after[3]==mark)) &&
+          (before[4]==after[4] || (before[4]=='' && after[4]==mark)) &&
+          (before[5]==after[5] || (before[5]=='' && after[5]==mark)) &&
+          (before[6]==after[6] || (before[6]=='' && after[6]==mark)) &&
+          (before[7]==after[7] || (before[7]=='' && after[7]==mark)) &&
+          (before[8]==after[8] || (before[8]=='' && after[8]==mark));
+      }
+      function validGameResponse() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return before.state in ['invited','playing'] &&
+          after.board == before.board &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.turn == before.turn && after.winner == before.winner &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(['state','updatedAt']) &&
+          (
+            (before.state == 'invited' &&
+              ((request.auth.uid == before.oUid && after.state in ['playing','declined']) ||
+               (request.auth.uid == before.xUid && after.state == 'cancelled'))) ||
+            (before.state == 'playing' &&
+              request.auth.uid in [before.xUid, before.oUid] &&
+              after.state == 'cancelled')
+          );
+      }
+      function validGameMove() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let mark = before.turn;
+        return before.state == 'playing' &&
+          mark in ['X','O'] &&
+          ((mark=='X' && request.auth.uid == before.xUid) ||
+           (mark=='O' && request.auth.uid == before.oUid)) &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(
+            ['board','turn','state','winner','updatedAt']
+          ) &&
+          after.board is list && after.board.size() == 9 &&
+          gameChangedCells(before.board,after.board) == 1 &&
+          gameAddsOnlyOwnMark(before.board,after.board,mark) &&
+          after.turn == (mark=='X' ? 'O' : 'X') &&
+          after.winner == (gameWinner(after.board,mark) ? mark : '') &&
+          after.state == (gameWinner(after.board,mark)
+            ? 'won' : ('' in after.board ? 'playing' : 'draw'));
+      }
+      match /games/{gameId} {
+        // The client uses only a single fixed game ID per private chat.
+        allow get: if gameId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if gameId == 'current' && member(threadId) &&
+          newGameInvitation(threadId);
+        allow update: if gameId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(gameFields()) &&
+          request.resource.data.keys().hasAll(gameFields()) &&
+          (
+            (resource.data.state in ['won','draw','cancelled','declined'] &&
+             newGameInvitation(threadId)) ||
+            validGameResponse() ||
+            validGameMove()
+          );
+        allow delete: if false;
+      }
+
       // Ephemeral activity status: only chat members can read the other person's
       // status, and only the signed-in user may update their OWN document.
       match /typing/{uid} {

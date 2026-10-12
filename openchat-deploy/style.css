@@ -257,3 +257,43 @@
   box-shadow:0 0 0 3px rgba(56,237,145,.12);vertical-align:middle;
 }
 .chat-info .chat-presence:not(.is-online):not(.is-typing):not(.is-error){color:#becfc5}
+
+/* Private Tic-Tac-Toe overlay: scoped to the active two-person chat. */
+.chat-view{position:relative}
+.game-toggle-btn{position:relative;flex:none;min-width:42px;min-height:42px;border:1px solid rgba(46,232,143,.33);border-radius:12px;background:#293c3f;color:#e9fff4;font-size:23px;line-height:1}
+.game-toggle-btn[aria-pressed="true"]{border-color:var(--green);background:#22563d}
+.game-toggle-btn:hover{background:#36534d}
+.game-toggle-btn:focus-visible,.game-panel button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.game-panel{position:absolute;top:83px;right:14px;z-index:45;display:flex;flex-direction:column;gap:11px;width:min(348px,calc(100% - 28px));max-height:calc(100% - 94px);overflow-y:auto;overscroll-behavior:contain;padding:17px;background:#202e39;border:1px solid rgba(117,225,163,.34);border-radius:18px;box-shadow:0 14px 48px rgba(3,10,14,.76);color:#e5f5ec}
+.game-panel-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.game-panel-header strong{display:block;font-size:17px;color:#b8ffd6}
+.game-panel-header small{display:block;margin-top:3px;color:#b9c9c4;font-size:11px}
+.game-close-btn{min-width:36px;min-height:36px;border:0;border-radius:10px;background:#334651;color:#e8faef;font-size:26px;line-height:1}
+.game-status{margin:1px 0 0;color:#d6e5df;font-size:13px;line-height:1.45;min-height:37px}
+.game-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-self:center;width:min(252px,100%)}
+.game-cell{width:100%;aspect-ratio:1/1;border:1px solid #4e6871;border-radius:13px;background:#2e434b;display:grid;place-items:center;color:#f0fff5;font-size:36px;line-height:1;transition:background .15s,border-color .15s}
+.game-cell.is-playable{cursor:pointer;border-color:#62bf91;background:#31564d}
+.game-cell.is-playable:hover{background:#3e775b;transform:scale(1.025)}
+.game-cell:disabled{cursor:default;opacity:.88}
+.game-cell:disabled:not(:empty){opacity:1}
+.game-buttons{display:flex;gap:9px;flex-wrap:wrap;align-items:stretch}
+.game-buttons button{flex:1;min-height:42px;padding:9px 12px;border-radius:11px;font-weight:700;font-size:13px}
+.game-primary-btn{border:0;background:#2ce28a;color:#123321}
+.game-secondary-btn{border:1px solid #687a77;background:#33454c;color:#f4f9f4}
+.game-buttons button:disabled{opacity:.6;cursor:wait}
+.game-error{margin:0;padding:10px;border-radius:9px;background:#503329;border:1px solid #a77d5d;color:#ffe3c7;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.game-footer{font-size:11px;color:#aabeb4;line-height:1.4;text-align:center}
+@media(max-width:700px){
+  .topbar{gap:8px}
+  .chat-info h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .game-toggle-btn{min-width:38px;min-height:38px;font-size:21px}
+  .game-panel{top:69px;left:9px;right:9px;width:auto;max-height:calc(100% - 79px);padding:14px}
+  .game-cell{font-size:33px}
+  .typing-check-toggle{padding:7px 6px;font-size:10px}
+}
+@media(max-width:360px){
+  .topbar{gap:5px;padding:10px 7px}
+  .game-toggle-btn{min-width:34px;min-height:34px;font-size:19px}
+  .typing-check-toggle{padding:6px 4px;font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){.game-cell{transition:none}.game-cell.is-playable:hover{transform:none}}
