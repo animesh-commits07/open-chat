@@ -394,7 +394,9 @@ service cloud.firestore {
             ) &&
             request.resource.data.uid == request.auth.uid &&
             request.resource.data.effect in
-              ['confetti','fireworks','sparkles','hearts'] &&
+              [
+                'confetti','fireworks','sparkles','hearts','balloons','snow','rainbow','stars','butterflies','flowers','lightning','bubbles','party','meteors','leaves','magic','candy','rockets','flames','disco','popcorn','clouds','diamonds','ghosts','cherry','ocean','unicorn','sunshine'
+              ] &&
             request.resource.data.playId is string &&
             request.resource.data.playId.matches('^[A-Za-z0-9]{20}$') &&
             request.resource.data.triggeredAt == request.time &&
@@ -417,9 +419,11 @@ service cloud.firestore {
           request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect']) &&
           validReply(threadId) &&
           // Animation is optional, chosen by the original sender at creation.
-          // The four allowed values cannot be arbitrary HTML or CSS.
+          // Only approved animation IDs are valid; never arbitrary HTML or CSS.
           (!('effect' in request.resource.data) ||
-            request.resource.data.effect in ['confetti','fireworks','sparkles','hearts']) &&
+            request.resource.data.effect in [
+                'confetti','fireworks','sparkles','hearts','balloons','snow','rainbow','stars','butterflies','flowers','lightning','bubbles','party','meteors','leaves','magic','candy','rockets','flames','disco','popcorn','clouds','diamonds','ghosts','cherry','ocean','unicorn','sunshine'
+              ]) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() > 0 &&
