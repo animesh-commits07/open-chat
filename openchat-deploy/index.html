@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=doodle-screen-20261012">
+  <link rel="stylesheet" href="./style.css?v=animated-messages-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -139,6 +139,18 @@
             </div>
             <button id="cancelReply" type="button" class="reply-composer-close" aria-label="Cancel reply" title="Cancel reply">×</button>
           </div>
+          <div class="message-effect-tools" id="effectTools">
+            <button id="effectToggleBtn" class="effect-toggle-btn" type="button" aria-controls="effectPicker" aria-expanded="false" aria-label="Choose a message effect">✨ Effects</button>
+            <small id="effectHint" class="effect-hint hidden" role="status" aria-live="polite"></small>
+            <div id="effectPicker" class="effect-picker hidden" role="group" aria-label="Choose a message animation">
+              <div class="effect-picker-heading">Add animation to your next message</div>
+              <div id="effectOptions" class="effect-options"></div>
+            </div>
+          </div>
+          <div id="effectSendError" class="message-effect-send-error hidden" role="alert">
+            <span id="effectSendErrorText"></span>
+            <button id="effectErrorDismiss" type="button" aria-label="Dismiss animated message error" title="Dismiss">×</button>
+          </div>
           <form class="composer" id="messageForm"><button type="button" id="composerEmojiBtn" class="composer-emoji-btn" title="Browse all emojis" aria-label="Choose emoji">☺</button><textarea id="messageInput" rows="1" maxlength="1000" placeholder="Write a personal message…" required></textarea><button class="send" id="sendBtn" type="submit" aria-label="Send message">➤</button></form><p class="status" id="status" role="status" aria-live="polite"></p>
           <div class="reaction-save-error hidden" id="reactionSaveError" role="alert">
             <span id="reactionSaveErrorText"></span>
@@ -158,6 +170,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=doodle-screen-20261012"></script>
+  <script type="module" src="./app.js?v=animated-messages-20261012"></script>
 </body>
 </html>

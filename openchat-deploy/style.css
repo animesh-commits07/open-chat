@@ -414,3 +414,44 @@
 .doodle-panel.is-viewing .doodle-overlay{pointer-events:none;cursor:default}
 .doodle-panel.is-viewing .doodle-screen-toolbar,
 .doodle-panel.is-viewing .doodle-hint{display:none}
+
+.message-effect-send-error{display:flex;align-items:flex-start;gap:10px;margin:3px 0 9px;padding:9px 11px;border:1px solid #c99a70;border-radius:11px;background:#51362b;color:#ffe4cf;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.message-effect-send-error span{flex:1;min-width:0}
+.message-effect-send-error button{flex:none;min-width:28px;min-height:28px;border:0;border-radius:8px;background:#6b4736;color:#fff;font-size:20px}
+.message-effect-send-error button:focus-visible{outline:2px solid #ffe0b4;outline-offset:2px}
+
+/* Message Effects: only a tiny icon and picker until a user explicitly
+   chooses an animation; the incoming effect is local, short and non-blocking. */
+.message-effect-tools{display:flex;position:relative;align-items:center;gap:10px;min-height:34px;margin:0 0 7px;flex-wrap:wrap}
+.effect-toggle-btn{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:6px 12px;border:1px solid rgba(168,238,193,.32);border-radius:12px;background:#293d42;color:#d5ffdf;font-size:12px;font-weight:750;white-space:nowrap}
+.effect-toggle-btn:hover,.effect-toggle-btn[aria-expanded="true"]{background:#375650;border-color:#6bdca4}
+.effect-hint{font-size:11px;color:#b8e9c9;line-height:1.35;min-width:0;overflow-wrap:anywhere}
+.effect-picker{position:absolute;left:0;bottom:calc(100% + 7px);z-index:62;display:flex;flex-direction:column;gap:10px;max-width:min(380px,100%);width:360px;max-height:min(53dvh,330px);overflow-y:auto;overscroll-behavior:contain;padding:13px;border:1px solid rgba(156,236,185,.38);border-radius:15px;background:#23343e;box-shadow:0 13px 35px rgba(5,14,19,.78)}
+.effect-picker-heading{font-size:12px;color:#c5ffdb;font-weight:750}
+.effect-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.effect-choice{min-height:41px;min-width:0;padding:8px 10px;border:1px solid rgba(207,247,217,.15);border-radius:10px;background:#34474d;color:#ecfaf2;font-size:12px;font-weight:700;text-align:center}
+.effect-choice:hover{background:#426054}
+.effect-choice.selected,.effect-choice[aria-pressed="true"]{background:#246448;border-color:#76eda9;color:#fff}
+.effect-picker button:focus-visible,.effect-toggle-btn:focus-visible,.msg-effect-replay:focus-visible{outline:2px solid #adffd2;outline-offset:2px}
+.msg.has-message-effect{position:relative;overflow:visible}
+.msg-effect-replay{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-height:26px;padding:3px 8px;margin-top:6px;border-radius:9px;border:1px solid rgba(230,255,240,.28);background:rgba(13,28,35,.18);color:#f2fbe5;font-size:10px;font-weight:700;line-height:1.2;white-space:nowrap}
+.msg-effect-replay:hover{background:rgba(255,255,255,.14)}
+.msg-effect-burst{position:absolute;top:50%;left:50%;z-index:8;overflow:visible;pointer-events:none;width:0;height:0}
+.msg-effect-particle{position:absolute;left:0;top:0;opacity:0;display:block;white-space:nowrap;font-size:23px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.19));animation:openchat-message-particle 1500ms ease-out both;animation-delay:var(--delay,0ms);transform-origin:center}
+.msg-effect-fireworks .msg-effect-particle{font-size:26px;animation-duration:1700ms}
+.msg-effect-sparkles .msg-effect-particle{font-size:21px}
+.msg-effect-hearts .msg-effect-particle{font-size:22px}
+@keyframes openchat-message-particle{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.22) rotate(0deg)}
+  16%{opacity:1;transform:translate(var(--dx-early),var(--dy-early)) scale(1.12) rotate(15deg)}
+  69%{opacity:1;transform:translate(var(--dx-middle),var(--dy-middle)) scale(1) rotate(var(--spin))}
+  100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.5) rotate(var(--spin))}
+}
+@media(max-width:700px){
+  .effect-picker{width:min(330px,calc(100vw - 25px));max-height:min(46dvh,300px)}
+  .message-effect-tools{margin-bottom:5px}
+  .msg-effect-particle{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){
+  .msg-effect-burst,.msg-effect-particle{animation:none!important;display:none!important}
+}
