@@ -1,6 +1,6 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,setDoc,updateDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,FieldPath,deleteField,setDoc,updateDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
@@ -798,6 +798,106 @@ function jumpToOriginal(id){
   target.classList.add('reply-highlight');
 }
 
+
+const REACTION_OPTIONS=[
+  ['❤️','Heart'],['😂','Laugh'],['👍','Like'],
+  ['😮','Surprised'],['😢','Sad'],['🙏','Thanks']
+];
+// Reactions share the existing message listener; no per-message listeners,
+// separate documents, or extra Cloudflare requests are necessary.
+const reactionWrites=new Set();
+function messageReactions(message){
+  const value=message?.reactions;
+  return value && typeof value==='object' && !Array.isArray(value)?value:{};
+}
+function myMessageReaction(message){
+  const reactions=messageReactions(message);
+  return me && Object.prototype.hasOwnProperty.call(reactions,me.uid)
+    ?reactions[me.uid]:null;
+}
+async function toggleMessageReaction(item,threadId,emoji){
+  if(!me || active?.id!==threadId ||
+     !REACTION_OPTIONS.some(([value])=>value===emoji))return;
+  if(item.metadata?.hasPendingWrites){
+    status('Wait for this message to finish sending.');
+    closeActions();return;
+  }
+  const uid=me.uid,key=threadId+'/'+item.id+'/'+uid;
+  if(reactionWrites.has(key))return;
+  const previous=myMessageReaction(item.data());
+  closeActions();
+  reactionWrites.add(key);
+  try{
+    // FieldPath isolates this user's map key so another participant's
+    // simultaneous reaction cannot be overwritten.
+    await updateDoc(doc(db,'threads',threadId,'messages',item.id),
+      new FieldPath('reactions',uid),
+      previous===emoji?deleteField():emoji);
+  }catch(error){
+    if(me?.uid===uid && active?.id===threadId){
+      status(error?.code==='permission-denied'
+        ?'Reactions blocked by Firebase rules. Publish the updated reaction rules.'
+        :'Could not update reaction: '+error.message);
+    }
+  }finally{
+    reactionWrites.delete(key);
+  }
+}
+function reactionChoices(item,message,threadId){
+  const row=el('div','reaction-choices');
+  row.setAttribute('role','group');
+  row.setAttribute('aria-label','Choose reaction');
+  const mine=myMessageReaction(message);
+  for(const [emoji,label] of REACTION_OPTIONS){
+    const button=el('button','reaction-choice'+(mine===emoji?' is-selected':''),emoji);
+    button.type='button';
+    button.title=mine===emoji?'Remove '+label+' reaction':'React '+label;
+    button.setAttribute('aria-label',button.title);
+    button.setAttribute('aria-pressed',String(mine===emoji));
+    button.onclick=()=>{void toggleMessageReaction(item,threadId,emoji)};
+    row.append(button);
+  }
+  return row;
+}
+function renderReactionChips(item,message,threadId){
+  const reactions=messageReactions(message);
+  const values=Object.values(reactions);
+  if(!values.some(emoji=>REACTION_OPTIONS.some(([allowed])=>allowed===emoji)))return null;
+  const chips=el('div','message-reactions');
+  chips.setAttribute('aria-label','Message reactions');
+  const mine=myMessageReaction(message);
+  for(const [emoji,label] of REACTION_OPTIONS){
+    const count=values.filter(v=>v===emoji).length;
+    if(!count)continue;
+    const chip=el('button','reaction-chip'+(mine===emoji?' mine':''),emoji+' '+count);
+    chip.type='button';
+    chip.title=mine===emoji?'Remove your '+label+' reaction':'React with '+label;
+    chip.setAttribute('aria-label',chip.title+', '+count+' total');
+    chip.setAttribute('aria-pressed',String(mine===emoji));
+    chip.onclick=()=>{void toggleMessageReaction(item,threadId,emoji)};
+    chips.append(chip);
+  }
+  return chips;
+}
+function showReactionPicker(item,message,node,threadId){
+  if(!me || active?.id!==threadId)return;
+  closeActions();
+  const menu=el('div','message-action-menu reaction-action-menu');
+  menu.setAttribute('role','group');
+  menu.setAttribute('aria-label','React to this message');
+  menu.append(reactionChoices(item,message,threadId));
+  const cancel=el('button','reaction-cancel','Cancel');
+  cancel.type='button';cancel.onclick=closeActions;
+  menu.append(cancel);
+  document.body.append(menu);actionMenu=menu;
+  if(window.innerWidth>700){
+    const rect=node.getBoundingClientRect();
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-124)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.left),window.innerWidth-320)+'px';
+  }
+  menu.querySelector('.reaction-choice')?.focus({preventScroll:true});
+}
+
 function closeActions(){if(actionMenu){actionMenu.remove();actionMenu=null}}
 function showActions(item,message,node,threadId){
   if(!me || active?.id!==threadId)return;
@@ -817,13 +917,13 @@ function showActions(item,message,node,threadId){
   };
   const cancel=el('button',null,'Cancel');
   cancel.type='button';cancel.onclick=closeActions;
-  menu.append(reply);
+  menu.append(reactionChoices(item,message,threadId),reply);
   if(edit)menu.append(edit);
   menu.append(copy,cancel);
   document.body.append(menu);actionMenu=menu;
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
-    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?240:190))+'px';
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?322:270))+'px';
     menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
   }
   reply.focus({preventScroll:true});
@@ -923,6 +1023,10 @@ function openChat(id,u){
     snapshot=>{
       if(me?.uid!==ownUid || active?.id!==id)return;
       const container=$('messages');
+      // Reactions use the same message stream. Preserve scroll position
+      // on a reaction/edit update rather than jumping to the newest message.
+      const atBottom=container.scrollHeight-container.scrollTop-container.clientHeight<96;
+      const previousScrollTop=container.scrollTop;
       container.replaceChildren();
       const messages=snapshot.docs.slice().reverse();
       visibleChatDocuments=messages;
@@ -933,6 +1037,8 @@ function openChat(id,u){
         const quote=createQuote(message.replyTo);
         if(quote)node.append(quote);
         node.append(el('div','msg-body',message.text));
+        const reactionChips=renderReactionChips(item,message,id);
+        if(reactionChips)node.append(reactionChips);
         enableReplyGesture(node,item,message,id);
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
@@ -944,6 +1050,12 @@ function openChat(id,u){
         replyButton.setAttribute('aria-label','Reply to this message');
         replyButton.onclick=()=>startReply(item,message,id);
         meta.append(replyButton);
+        const reactButton=el('button','react-trigger','☺');
+        reactButton.type='button';
+        reactButton.title='React to this message';
+        reactButton.setAttribute('aria-label','React to this message');
+        reactButton.onclick=()=>showReactionPicker(item,message,node,id);
+        meta.append(reactButton);
         if(own){
           const state=outgoingReceiptState(message,!!item.metadata?.hasPendingWrites);
           const ticks=el('span','receipt-ticks receipt-'+state,state==='sending'?'◷':state==='sent'?'✓':'✓✓');
@@ -970,7 +1082,7 @@ function openChat(id,u){
         }
         node.append(meta);container.append(node);
       }
-      container.scrollTop=container.scrollHeight;
+      container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
       if(!snapshot.metadata.fromCache)markVisibleChatSeen();
       status('Private chat • latest 300 messages');
     },
