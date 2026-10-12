@@ -35,10 +35,8 @@ export const ANIMATED_MESSAGE_EFFECTS=Object.freeze({
 
 const AUTO_WINDOW_MS=45000;
 const INITIAL_WINDOW_MS=9000;
-const MAX_AUTOPLAY_PER_SNAPSHOT=3;
+const MAX_AUTOPLAY_PER_SNAPSHOT=8;
 const FX_LIFETIME_MS=2200;
-const MOTIONS=new Set(['burst','orbit','float','fall','arc','flutter',
-  'flash','shoot','rise','pulse','wave','glow']);
 
 export function validAnimatedMessageEffect(name){
   return typeof name==='string' &&
