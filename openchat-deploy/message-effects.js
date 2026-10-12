@@ -151,8 +151,9 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
     button.type='button';
     button.className='effect-trigger';
     button.textContent='✨ Animate';
-    button.title='Animate this message for both friends';
-    button.setAttribute('aria-label','Animate message for both friends');
+    const action=validAnimatedMessageEffect(message.effect)?'Replay':'Animate';
+    button.title=action+' this message for both friends';
+    button.setAttribute('aria-label',action+' message for both friends');
     const remaining=Math.max(0,timestamp+1000-Date.now());
     const options=document.createElement('button');
     options.type='button';
