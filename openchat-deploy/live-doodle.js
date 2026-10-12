@@ -109,7 +109,7 @@ export function createLiveDoodleController({db,getContext}){
     ctx.setTransform(width/1000,0,0,height/1000,0,0);
   }
   function resize(){
-    if(!open)return;
+    if(!scope)return;
     configureCanvas(canvas);configureCanvas(overlay);
     redrawBase();redrawOverlay();
   }
@@ -318,7 +318,7 @@ export function createLiveDoodleController({db,getContext}){
     if(scope!==original||!current())return;
     serverRoom=!snapshot.metadata.fromCache;
     if(!snapshot.exists()){
-      if(serverRoom)void ensureRoom(original);
+      if(serverRoom&&open)void ensureRoom(original);
       renderStatus();return;
     }
     const next=snapshot.data()?.session;
@@ -364,20 +364,22 @@ export function createLiveDoodleController({db,getContext}){
     // conversation switch; canvas pixels outlive the DOM panel otherwise.
     redrawBase();redrawOverlay();
     panel.classList.add('hidden');
+    panel.classList.remove('is-viewing');
     launch.setAttribute('aria-expanded','false');
     launch.setAttribute('aria-pressed','false');
     renderStatus();
   }
-  function openDoodle(){
-    const context=getContext();
-    if(!context?.threadId||!context.uid||!context.friendUid)return;
+  // Viewer mode is always visible over the chat, but never blocks
+  // scrolling, typing, reacting, or tapping messages. Only the Draw button
+  // switches on touch capture and the floating brush controls.
+  function connect(threadId,uid,friendUid,friendName='friend'){
+    if(!threadId||!uid||!friendUid)return;
     close();
-    scope={...context};open=true;
-    roomRef=doc(db,'threads',scope.threadId,'doodles','current');
+    scope={threadId,uid,friendUid,friendName};
+    open=false;
+    roomRef=doc(db,'threads',threadId,'doodles','current');
     panel.classList.remove('hidden');
-    launch.setAttribute('aria-expanded','true');
-    launch.setAttribute('aria-pressed','true');
-    gameClose.click();
+    panel.classList.add('is-viewing');
     renderStatus();
     resize();
     if(typeof ResizeObserver!=='undefined'){
@@ -391,8 +393,34 @@ export function createLiveDoodleController({db,getContext}){
       problem=>{if(scope!==original||!current())return;
         serverRoom=false;serverStrokes=false;warn(problem)});
   }
-  launch.onclick=()=>{if(open)close();else openDoodle()};
-  closeBtn.onclick=close;
-  panel.addEventListener('keydown',event=>{if(event.key==='Escape')close()});
-  return {open:openDoodle,close};
+  function stopDrawing(){
+    if(!scope)return;
+    endActivePointer();
+    open=false;
+    panel.classList.add('is-viewing');
+    launch.setAttribute('aria-expanded','false');
+    launch.setAttribute('aria-pressed','false');
+    renderStatus();
+  }
+  function openDoodle(){
+    const context=getContext();
+    if(!context?.threadId||!context.uid||!context.friendUid)return;
+    if(!scope||!current())connect(context.threadId,context.uid,context.friendUid,
+      context.friendName||'friend');
+    if(!current())return;
+    open=true;
+    panel.classList.remove('is-viewing');
+    launch.setAttribute('aria-expanded','true');
+    launch.setAttribute('aria-pressed','true');
+    gameClose.click();
+    renderStatus();
+    resize();
+    // Avoid creating Firestore documents for chats nobody ever doodled in.
+    // A room is created only when somebody actually starts drawing.
+    if(serverRoom&&!sessionId&&!initializing)void ensureRoom(scope);
+  }
+  launch.onclick=()=>{if(open)stopDrawing();else openDoodle()};
+  closeBtn.onclick=stopDrawing;
+  panel.addEventListener('keydown',event=>{if(event.key==='Escape')stopDrawing()});
+  return {open:openDoodle,connect,exit:stopDrawing,close};
 }
