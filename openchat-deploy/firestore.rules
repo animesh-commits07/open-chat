@@ -381,19 +381,22 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow get, list: if member(threadId);
         allow create: if member(threadId) &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect']) &&
           validReply(threadId) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() > 0 &&
           request.resource.data.text.size() <= 1000 &&
+          // Optional effect uses a strict whitelist; no arbitrary HTML or code.
+          (!('effect' in request.resource.data) ||
+            request.resource.data.effect in ['confetti','fireworks','sparkles','hearts']) &&
           // Use a server-issued send time, not a user-controlled timestamp.
           request.resource.data.createdAt == request.time;
         // Only the receiving participant may acknowledge delivery/read.
         // Never permit changing sender, text or creation time.
         allow update: if member(threadId) &&
           request.auth.uid != resource.data.senderId &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions', 'effect']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
           ('deliveredAt' in request.resource.data) &&
@@ -421,7 +424,7 @@ service cloud.firestore {
           resource.data.createdAt is timestamp &&
           request.time >= resource.data.createdAt &&
           request.time - resource.data.createdAt < duration.value(15, 'm') &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions', 'effect']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
           request.resource.data.text is string &&
@@ -434,7 +437,7 @@ service cloud.firestore {
         // A nested FieldPath write preserves simultaneous reactions, message edits,
         // sender/original timestamp, replies, and the delivery/read receipts.
         allow update: if member(threadId) &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions', 'effect']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
           request.resource.data.get('reactions', {}) is map &&
