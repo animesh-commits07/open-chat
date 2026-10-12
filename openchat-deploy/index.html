@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=doodle-screen-20261012">
+  <link rel="stylesheet" href="./style.css?v=animated-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -124,6 +124,7 @@
           </div>
           <small class="doodle-hint">Draw on the messages. Tap Done to return to normal chat.</small>
         </section>
+        <div id="messageEffectsLayer" class="message-effects-layer" aria-hidden="true"></div>
         </div>
         <div class="composer-area">
           <div id="editPreview" class="edit-composer hidden" role="status" aria-live="polite">
@@ -139,7 +140,7 @@
             </div>
             <button id="cancelReply" type="button" class="reply-composer-close" aria-label="Cancel reply" title="Cancel reply">×</button>
           </div>
-          <form class="composer" id="messageForm"><button type="button" id="composerEmojiBtn" class="composer-emoji-btn" title="Browse all emojis" aria-label="Choose emoji">☺</button><textarea id="messageInput" rows="1" maxlength="1000" placeholder="Write a personal message…" required></textarea><button class="send" id="sendBtn" type="submit" aria-label="Send message">➤</button></form><p class="status" id="status" role="status" aria-live="polite"></p>
+          <form class="composer" id="messageForm"><button type="button" id="composerEmojiBtn" class="composer-emoji-btn" title="Browse all emojis" aria-label="Choose emoji">☺</button><select id="messageEffectSelect" class="message-effect-select" aria-label="Choose animation for next message" title="Message animation"><option value="">✨ None</option><option value="confetti">🎉 Confetti</option><option value="fireworks">🎆 Fireworks</option><option value="sparkles">✨ Sparkles</option><option value="hearts">💖 Hearts</option></select><textarea id="messageInput" rows="1" maxlength="1000" placeholder="Write a personal message…" required></textarea><button class="send" id="sendBtn" type="submit" aria-label="Send message">➤</button></form><p class="status" id="status" role="status" aria-live="polite"></p>
           <div class="reaction-save-error hidden" id="reactionSaveError" role="alert">
             <span id="reactionSaveErrorText"></span>
             <button type="button" id="reactionErrorDismiss" aria-label="Dismiss reaction error" title="Dismiss">×</button>
@@ -158,6 +159,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=doodle-screen-20261012"></script>
+  <script type="module" src="./app.js?v=animated-20261012"></script>
 </body>
 </html>
