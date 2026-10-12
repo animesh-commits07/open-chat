@@ -193,7 +193,7 @@ export function createChatMiniGames({
     board.setAttribute('role','group');board.setAttribute('aria-label','Tic-Tac-Toe board');
     for(let i=0;i<9;i++){
       const value=game.cells?.[String(i)]||'';
-      const cell=el('button','mini-ttt-cell'+(value?' occupied':'')+(value==='X'?' x':' o'),value||'');
+      const cell=el('button','mini-ttt-cell'+(value?' occupied '+value.toLowerCase():''),value||'');
       cell.type='button';
       cell.setAttribute('aria-label','Row '+(Math.floor(i/3)+1)+', column '+(i%3+1)+': '+(value||'empty'));
       cell.disabled=busy||!myTurn||!!value;
@@ -277,6 +277,7 @@ export function createChatMiniGames({
     }
   }
   panel.addEventListener('click',event=>{if(event.target===panel)close()});
+  panel.addEventListener('keydown',event=>{if(event.key==='Escape')close()});
   launchButton.onclick=()=>{if(current)close();else open()};
   return {open,close};
 }
