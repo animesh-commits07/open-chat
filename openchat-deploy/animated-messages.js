@@ -30,7 +30,7 @@ export function createAnimatedMessagesController(){
   const toggle=$('effectToggleBtn'),picker=$('effectPicker');
   const options=$('effectOptions'),hint=$('effectHint');
   let selected='',threadId=null,known=new Set(),initialized=false;
-  let playingUntil=new Map();
+  let playingUntil=new Map(),editing=false;
 
   function updateSelection(){
     const data=ANIMATED_MESSAGE_EFFECTS[selected];
@@ -52,6 +52,7 @@ export function createAnimatedMessagesController(){
     toggle.setAttribute('aria-expanded','false');
   }
   function selectEffect(name){
+    if(editing && name!=='')return;
     if(name!==''&&!validAnimatedMessageEffect(name))return;
     selected=name;
     updateSelection();
@@ -71,6 +72,7 @@ export function createAnimatedMessagesController(){
     options.append(option);
   }
   toggle.onclick=()=>{
+    if(editing)return;
     const next=picker.classList.contains('hidden');
     picker.classList.toggle('hidden',!next);
     toggle.setAttribute('aria-expanded',String(next));
@@ -82,15 +84,23 @@ export function createAnimatedMessagesController(){
 
   function beginChat(id){
     threadId=id;
-    selected='';known=new Set();initialized=false;playingUntil.clear();
+    selected='';editing=false;toggle.disabled=false;
+    known=new Set();initialized=false;playingUntil.clear();
     updateSelection();closePicker();
   }
   function endChat(){
     threadId=null;
-    selected='';known=new Set();initialized=false;playingUntil.clear();
+    selected='';editing=false;toggle.disabled=false;
+    known=new Set();initialized=false;playingUntil.clear();
     updateSelection();closePicker();
   }
-  function currentEffect(){return validAnimatedMessageEffect(selected)?selected:''}
+  function setEditing(value){
+    editing=!!value;
+    toggle.disabled=editing;
+    if(editing)selectEffect('');
+    closePicker();
+  }
+  function currentEffect(){return !editing&&validAnimatedMessageEffect(selected)?selected:''}
   function clearSentEffect(expected){
     if(selected===expected)selectEffect('');
   }
@@ -178,6 +188,6 @@ export function createAnimatedMessagesController(){
     if(animate && id)playingUntil.set(id,Date.now()+1750);
     if(animate || (id && (playingUntil.get(id)||0)>Date.now()))play(node,effect);
   }
-  return {beginChat,endChat,currentEffect,clearSentEffect,
+  return {beginChat,endChat,setEditing,currentEffect,clearSentEffect,
     observeSnapshot,decorateMessage,selectEffect,closePicker};
 }
