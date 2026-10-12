@@ -167,7 +167,7 @@ service cloud.firestore {
       function validGameResponse() {
         let before = resource.data;
         let after = request.resource.data;
-        return before.state == 'invited' &&
+        return before.state in ['invited','playing'] &&
           after.board == before.board &&
           after.xUid == before.xUid && after.oUid == before.oUid &&
           after.createdAt == before.createdAt &&
@@ -175,8 +175,12 @@ service cloud.firestore {
           after.updatedAt == request.time &&
           after.diff(before).affectedKeys().hasOnly(['state','updatedAt']) &&
           (
-            (request.auth.uid == before.oUid && after.state in ['playing','declined']) ||
-            (request.auth.uid == before.xUid && after.state == 'cancelled')
+            (before.state == 'invited' &&
+              ((request.auth.uid == before.oUid && after.state in ['playing','declined']) ||
+               (request.auth.uid == before.xUid && after.state == 'cancelled'))) ||
+            (before.state == 'playing' &&
+              request.auth.uid in [before.xUid, before.oUid] &&
+              after.state == 'cancelled')
           );
       }
       function validGameMove() {
