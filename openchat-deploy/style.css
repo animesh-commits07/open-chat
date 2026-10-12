@@ -447,3 +447,8 @@
   .message-effect-particle{animation:message-effect-gentle 650ms ease-out var(--wait,0ms) both;will-change:auto}
   @keyframes message-effect-gentle{0%{opacity:0;transform:translate(-50%,-50%)}35%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%)}}
 }
+
+/* Optional alternate effects; the Animate button itself is one tap. */
+.effect-options{flex:none;min-width:26px;min-height:26px;border:1px solid rgba(176,249,204,.28);border-radius:8px;background:#294a42;padding:3px 6px;color:#c9ffe2;font-weight:850;font-size:12px}
+.effect-options:hover{background:#397b58}
+.effect-options:focus-visible{outline:2px solid #b4ffd0;outline-offset:2px}
