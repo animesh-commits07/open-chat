@@ -101,7 +101,7 @@ export function createTicTacToeController({db,getContext}){
         text=myTurn?'Your turn ('+(mine==='X'?'❌':'⭕')+')':
           'Waiting for '+friend+' ('+(other==='X'?'❌':'⭕')+')…';
         if(pendingMove)text='Sending your move…';
-        canPlay=myTurn && !isBusy && !pendingMove && !errorMessage;
+        canPlay=myTurn && !isBusy && !pendingMove;
         second='End game';onSecond=()=>respond('cancelled');
       }else{
         if(game.state==='won')
@@ -220,7 +220,7 @@ export function createTicTacToeController({db,getContext}){
   function makeMove(index){
     if(!Number.isInteger(index)||index<0||index>8 ||
        !game || game.state!=='playing' || !stillCurrent() ||
-       !serverReady || isBusy || pendingMove || errorMessage ||
+       !serverReady || isBusy || pendingMove ||
        !Array.isArray(game.board) || game.board.length!==9 ||
        game.board[index]!=='')return;
     const mark=game.turn;
