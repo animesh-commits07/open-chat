@@ -4,6 +4,7 @@ import {getFirestore,doc,FieldPath,deleteField,setDoc,updateDoc,getDoc,getDocFro
 import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
+import {createLiveDoodleController} from './live-doodle.js?v=doodle-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -22,6 +23,15 @@ const quickQuiz=createQuickQuizController({db,getContext:()=>
   me && active?{threadId:active.id,uid:me.uid,friendUid:active.other.uid}:null
 });
 $('gameToggleBtn').addEventListener('click',()=>quickQuiz.close());
+// Live Doodle uses a separate private Firestore session and closes competing
+// mini-game overlays without changing their saved data.
+const liveDoodle=createLiveDoodleController({db,getContext:()=>
+  me && active?{threadId:active.id,uid:me.uid,friendUid:active.other.uid,
+    friendName:active.other.username}:null
+});
+$('gameToggleBtn').addEventListener('click',()=>liveDoodle.close());
+$('quizLaunchBtn').addEventListener('click',()=>liveDoodle.close());
+$('doodleLaunchBtn').addEventListener('click',()=>quickQuiz.close());
 
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
@@ -196,6 +206,7 @@ onAuthStateChanged(auth,async u=>{
   if(stopThreads){stopThreads();stopThreads=null}
   ticTacToe.close();
   quickQuiz.close();
+  liveDoodle.close();
   stopOwnPresence();
   stopFriendPresence();
   stopEditing(false);
@@ -1379,6 +1390,7 @@ function createQuote(replyTo){
 function openChat(id,u){
   ticTacToe.close();
   quickQuiz.close();
+  liveDoodle.close();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1470,7 +1482,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}

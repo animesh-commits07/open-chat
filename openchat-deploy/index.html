@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=fast-game-20261012">
+  <link rel="stylesheet" href="./style.css?v=doodle-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -70,7 +70,7 @@
             <div><strong>🎮 Tic-Tac-Toe</strong><small>Private game · ❌ vs ⭕</small></div>
             <button type="button" id="gameCloseBtn" class="game-close-btn" title="Close game panel" aria-label="Close game panel">×</button>
           </div>
-          <div class="game-mini-nav"><button type="button" id="quizLaunchBtn" class="quiz-launch-btn" aria-controls="quizPanel" aria-expanded="false">🧠 Quick Quiz</button></div>
+          <div class="game-mini-nav"><button type="button" id="quizLaunchBtn" class="quiz-launch-btn" aria-controls="quizPanel" aria-expanded="false">🧠 Quick Quiz</button><button type="button" id="doodleLaunchBtn" class="doodle-launch-btn" aria-controls="doodlePanel" aria-expanded="false">✍️ Live Doodle</button></div>
           <p class="game-status" id="gameStatus" role="status" aria-live="polite">Invite a friend to play!</p>
           <div class="game-board" id="gameBoard" role="group" aria-label="Tic-Tac-Toe board"></div>
           <div class="game-buttons">
@@ -85,6 +85,28 @@
           <div id="quizError" class="quiz-error hidden" role="alert"></div>
           <div id="quizBody" class="quiz-body"></div>
           <small class="quiz-footer">Five questions each · Live scores · Private to this chat</small>
+        </section>
+        <section id="doodlePanel" class="doodle-panel hidden" role="region" aria-label="Shared Live Doodle Battle">
+          <header class="doodle-header">
+            <div><h2>✍️ Live Doodle Battle</h2><small>Draw together in this private chat — both friends share one canvas.</small></div>
+            <button id="doodleCloseBtn" class="doodle-close-btn" type="button" title="Close drawing canvas" aria-label="Close drawing canvas">×</button>
+          </header>
+          <p id="doodleStatus" class="doodle-status" role="status" aria-live="polite">Connecting to shared canvas…</p>
+          <div class="doodle-toolbar" aria-label="Drawing tools">
+            <div id="doodleColors" class="doodle-colors" role="group" aria-label="Pen colors"></div>
+            <div id="doodleSizes" class="doodle-sizes" role="group" aria-label="Brush width"></div>
+            <button id="doodleEraserBtn" class="doodle-eraser-btn" type="button" aria-pressed="false" title="White eraser">◻ Eraser</button>
+          </div>
+          <div class="doodle-canvas-wrap">
+            <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
+            <canvas id="doodleOverlay" class="doodle-overlay" aria-label="Shared drawing canvas, draw with finger or mouse"></canvas>
+          </div>
+          <div class="doodle-bottom">
+            <small id="doodleCounter" class="doodle-counter">0 synced segments</small>
+            <button id="doodleClearBtn" class="doodle-clear-btn" type="button">Clear canvas for both</button>
+          </div>
+          <p id="doodleError" class="doodle-error hidden" role="alert"></p>
+          <small class="doodle-hint">Each friend opens 🎮 → Live Doodle. Touch or drag to draw. Changes appear on both screens when synced. Eraser paints white; Clear starts a fresh shared canvas.</small>
         </section>
         <div id="typingDiagnostics" class="typing-diagnostics hidden" role="region" aria-label="Typing connection diagnostics">
           <strong>Typing connection check</strong>
@@ -132,6 +154,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=fast-game-20261012"></script>
+  <script type="module" src="./app.js?v=doodle-20261012"></script>
 </body>
 </html>

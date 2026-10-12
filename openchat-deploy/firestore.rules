@@ -110,6 +110,61 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
       allow delete: if false;
 
+      // One shared live canvas per private thread, isolated from messages.
+      match /doodles/{roomId} {
+        allow get: if roomId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if roomId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(['session','createdAt','updatedAt']) &&
+          request.resource.data.keys().hasAll(['session','createdAt','updatedAt']) &&
+          request.resource.data.session is string &&
+          request.resource.data.session.matches('^[A-Za-z0-9]{20}$') &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+        // Clear changes only the random session ID and server update time.
+        allow update: if roomId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(['session','createdAt','updatedAt']) &&
+          request.resource.data.keys().hasAll(['session','createdAt','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['session','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['session','updatedAt']) &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.session is string &&
+          request.resource.data.session.matches('^[A-Za-z0-9]{20}$') &&
+          request.resource.data.session != resource.data.session &&
+          request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+
+        // Stroke segments are immutable, server-timestamped, limited in size,
+        // and readable/writable only while their session is current.
+        match /sessions/{sessionId}/strokes/{strokeId} {
+          function activeDoodleSession() {
+            return exists(/databases/$(database)/documents/threads/$(threadId)/doodles/current) &&
+              get(/databases/$(database)/documents/threads/$(threadId)/doodles/current)
+                .data.session == sessionId;
+          }
+          allow get, list: if roomId == 'current' && member(threadId) &&
+            activeDoodleSession();
+          allow create: if roomId == 'current' && member(threadId) &&
+            activeDoodleSession() &&
+            request.resource.data.keys().hasOnly(['uid','color','size','points','createdAt']) &&
+            request.resource.data.keys().hasAll(['uid','color','size','points','createdAt']) &&
+            request.resource.data.uid == request.auth.uid &&
+            request.resource.data.color in [
+              '#263548','#ff6b6b','#29aa85','#6e62e5','#f7ad30','#ffffff'
+            ] &&
+            request.resource.data.size in [3,6,12,24] &&
+            request.resource.data.points is string &&
+            request.resource.data.points.size() <= 256 &&
+            request.resource.data.points.matches(
+              '^[0-9]{4},[0-9]{4}(;[0-9]{4},[0-9]{4}){0,24}$'
+            ) &&
+            request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+      }
+
       // One private Tic-Tac-Toe match per conversation (games/current).
       // Its fixed path prevents unbounded game invitation documents.
       // Only conversation members may inspect or change the match.
