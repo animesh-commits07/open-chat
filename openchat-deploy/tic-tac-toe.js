@@ -160,7 +160,7 @@ export function createTicTacToeController({db,getContext}){
     try{
       await runTransaction(db,async tx=>{
         const snap=await tx.get(ref);
-        await operation(tx,snap,original);
+        await operation(tx,snap,original,ref);
       });
       if(scope===original && stillCurrent())errorMessage='';
     }catch(error){
@@ -170,10 +170,10 @@ export function createTicTacToeController({db,getContext}){
     }
   }
   function inviteGame(){
-    return runAction(async(tx,snap,current)=>{
+    return runAction(async(tx,snap,current,ref)=>{
       if(snap.exists() && !TERMINAL.has(snap.data().state))
         throw Error('Finish or end the current game first.');
-      tx.set(reference,{
+      tx.set(ref,{
         xUid:current.uid,oUid:current.friendUid,board:EMPTY(),turn:'X',
         state:'invited',winner:'',
         createdAt:serverTimestamp(),updatedAt:serverTimestamp()
@@ -182,7 +182,7 @@ export function createTicTacToeController({db,getContext}){
   }
   function respond(next){
     if(!['playing','declined','cancelled'].includes(next))return;
-    return runAction(async(tx,snap,current)=>{
+    return runAction(async(tx,snap,current,ref)=>{
       if(!snap.exists())throw Error('Game invitation no longer exists.');
       const data=snap.data();
       if(next==='playing'||next==='declined'){
@@ -192,12 +192,12 @@ export function createTicTacToeController({db,getContext}){
         (data.state==='invited'&&data.xUid===current.uid) ||
         (data.state==='playing'&&[data.xUid,data.oUid].includes(current.uid))
       ))throw Error('This game cannot be ended.');
-      tx.update(reference,{state:next,updatedAt:serverTimestamp()});
+      tx.update(ref,{state:next,updatedAt:serverTimestamp()});
     });
   }
   function makeMove(index){
     if(!Number.isInteger(index)||index<0||index>8)return;
-    return runAction(async(tx,snap,current)=>{
+    return runAction(async(tx,snap,current,ref)=>{
       if(!snap.exists())throw Error('Game was removed.');
       const currentGame=snap.data(),mark=currentGame.turn;
       if(currentGame.state!=='playing'||
@@ -209,7 +209,7 @@ export function createTicTacToeController({db,getContext}){
       const board=currentGame.board.slice();
       board[index]=mark;
       const result=gameMoveOutcome(board,mark);
-      tx.update(reference,{
+      tx.update(ref,{
         board,turn:mark==='X'?'O':'X',state:result.state,
         winner:result.winner,updatedAt:serverTimestamp()
       });
