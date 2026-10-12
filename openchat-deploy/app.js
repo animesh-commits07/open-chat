@@ -1023,6 +1023,10 @@ function openChat(id,u){
     snapshot=>{
       if(me?.uid!==ownUid || active?.id!==id)return;
       const container=$('messages');
+      // Reactions use the same message stream. Preserve scroll position
+      // on a reaction/edit update rather than jumping to the newest message.
+      const atBottom=container.scrollHeight-container.scrollTop-container.clientHeight<96;
+      const previousScrollTop=container.scrollTop;
       container.replaceChildren();
       const messages=snapshot.docs.slice().reverse();
       visibleChatDocuments=messages;
@@ -1078,7 +1082,7 @@ function openChat(id,u){
         }
         node.append(meta);container.append(node);
       }
-      container.scrollTop=container.scrollHeight;
+      container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
       if(!snapshot.metadata.fromCache)markVisibleChatSeen();
       status('Private chat • latest 300 messages');
     },
