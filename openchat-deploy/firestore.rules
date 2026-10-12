@@ -166,8 +166,11 @@ service cloud.firestore {
           ).affectedKeys().hasAny([request.auth.uid]) &&
           (
             !(request.auth.uid in request.resource.data.get('reactions', {})) ||
-            request.resource.data.get('reactions', {})[request.auth.uid] in
-              ['❤️', '😂', '👍', '😮', '😢', '🙏']
+            (
+              request.resource.data.get('reactions', {})[request.auth.uid] is string &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() > 0 &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() <= 32
+            )
           );
         allow delete: if member(threadId) &&
           resource.data.senderId == request.auth.uid;

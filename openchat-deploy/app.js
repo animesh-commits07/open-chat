@@ -816,8 +816,11 @@ function myMessageReaction(message){
     ?reactions[me.uid]:null;
 }
 async function toggleMessageReaction(item,threadId,emoji){
+  // Every fully-qualified Unicode emoji is accepted, not just the quick six.
+  // isSingleEmojiMessage recognizes emoji ZWJ families, flags and skin tones.
   if(!me || active?.id!==threadId ||
-     !REACTION_OPTIONS.some(([value])=>value===emoji))return;
+     typeof emoji!=='string' || emoji.length>32 ||
+     !isSingleEmojiMessage(emoji))return;
   if(item.metadata?.hasPendingWrites){
     status('Wait for this message to finish sending.');
     closeActions();return;
@@ -857,21 +860,30 @@ function reactionChoices(item,message,threadId){
     button.onclick=()=>{void toggleMessageReaction(item,threadId,emoji)};
     row.append(button);
   }
+  const more=el('button','reaction-choice reaction-more','＋');
+  more.type='button';
+  more.title='Browse all emojis';
+  more.setAttribute('aria-label','Browse all emojis');
+  more.onclick=()=>showAllEmojiPicker(
+    emoji=>{void toggleMessageReaction(item,threadId,emoji)},threadId);
+  row.append(more);
   return row;
 }
 function renderReactionChips(item,message,threadId){
   const reactions=messageReactions(message);
-  const values=Object.values(reactions);
-  if(!values.some(emoji=>REACTION_OPTIONS.some(([allowed])=>allowed===emoji)))return null;
+  const values=Object.values(reactions).filter(value=>
+    typeof value==='string' && value.length<=32 && isSingleEmojiMessage(value)
+  );
+  if(!values.length)return null;
   const chips=el('div','message-reactions');
   chips.setAttribute('aria-label','Message reactions');
   const mine=myMessageReaction(message);
-  for(const [emoji,label] of REACTION_OPTIONS){
-    const count=values.filter(v=>v===emoji).length;
-    if(!count)continue;
+  const counts=new Map();
+  for(const emoji of values)counts.set(emoji,(counts.get(emoji)||0)+1);
+  for(const [emoji,count] of counts){
     const chip=el('button','reaction-chip'+(mine===emoji?' mine':''),emoji+' '+count);
     chip.type='button';
-    chip.title=mine===emoji?'Remove your '+label+' reaction':'React with '+label;
+    chip.title=mine===emoji?'Remove your reaction':'React with '+emoji;
     chip.setAttribute('aria-label',chip.title+', '+count+' total');
     chip.setAttribute('aria-pressed',String(mine===emoji));
     chip.onclick=()=>{void toggleMessageReaction(item,threadId,emoji)};
@@ -879,6 +891,206 @@ function renderReactionChips(item,message,threadId){
   }
   return chips;
 }
+
+// Full Unicode Emoji 17.0 catalog is bundled locally and loaded only when
+// requested. No third-party script receives access to private chats.
+const RECENT_EMOJIS_KEY='openchat-recent-emojis-v1';
+let emojiGroupsPromise=null;
+function loadEmojiGroups(){
+  if(!emojiGroupsPromise){
+    emojiGroupsPromise=import('./emoji-data.js?v=emoji17-20261012')
+      .then(module=>module.EMOJI_GROUPS)
+      .catch(error=>{emojiGroupsPromise=null;throw error});
+  }
+  return emojiGroupsPromise;
+}
+function recentEmojiValues(){
+  try{
+    const list=JSON.parse(localStorage.getItem(RECENT_EMOJIS_KEY)||'[]');
+    return Array.isArray(list)
+      ?list.filter(emoji=>typeof emoji==='string' &&
+        emoji.length<=32 && isSingleEmojiMessage(emoji)).slice(0,24)
+      :[];
+  }catch{return []}
+}
+function rememberEmoji(emoji){
+  if(!isSingleEmojiMessage(emoji))return;
+  try{
+    const recent=recentEmojiValues().filter(value=>value!==emoji);
+    localStorage.setItem(RECENT_EMOJIS_KEY,JSON.stringify([emoji,...recent].slice(0,24)));
+  }catch{}
+}
+function showAllEmojiPicker(onSelect,threadId){
+  if(!me || active?.id!==threadId)return;
+  const initialUid=me.uid;
+  closeActions();
+  const backdrop=el('div','all-emoji-backdrop');
+  backdrop.onclick=event=>{if(event.target===backdrop)closeActions()};
+  const panel=el('section','all-emoji-panel');
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-modal','true');
+  panel.setAttribute('aria-label','All emojis');
+  const header=el('div','all-emoji-header');
+  header.append(el('strong',null,'Choose an emoji'));
+  const close=el('button','all-emoji-close','×');
+  close.type='button';close.title='Close emoji picker';
+  close.setAttribute('aria-label','Close emoji picker');
+  close.onclick=closeActions;
+  header.append(close);
+  const search=el('input','all-emoji-search');
+  search.type='search';search.autocomplete='off';
+  search.placeholder='Search all emojis…';
+  search.setAttribute('aria-label','Search all emojis');
+  const categories=el('div','all-emoji-categories');
+  categories.setAttribute('role','tablist');
+  categories.setAttribute('aria-label','Emoji categories');
+  const tones=el('div','all-emoji-tones');
+  tones.setAttribute('aria-label','Skin tone options');
+  const results=el('div','all-emoji-results');
+  results.append(el('p','all-emoji-loading','Loading emoji library…'));
+  const footer=el('div','all-emoji-footer');
+  footer.textContent='Unicode Emoji 17.0';
+  panel.append(header,search,categories,tones,results,footer);
+  backdrop.append(panel);
+  document.body.append(backdrop);
+  actionMenu=backdrop;
+  search.focus({preventScroll:true});
+
+  void loadEmojiGroups().then(groups=>{
+    if(actionMenu!==backdrop || active?.id!==threadId || me?.uid!==initialUid)return;
+    const all=groups.flatMap(group=>
+      group.emojis.map(([emoji,name])=>[emoji,name,group.name]));
+    const known=new Map(all.map(row=>[row[0],row]));
+    const modifiers=['🏻','🏼','🏽','🏾','🏿'];
+    const toneOptions=[
+      ['all','All tones','🌈'],['base','Default','✋'],
+      ['🏻','Light','✋🏻'],['🏼','Light-medium','✋🏼'],
+      ['🏽','Medium','✋🏽'],['🏾','Dark-medium','✋🏾'],
+      ['🏿','Dark','✋🏿']
+    ];
+    const groupsWithRecent=[{name:'Recent',icon:'🕘'},...groups];
+    let category=groups[0].name,tone='all',shown=112;
+    function matchesTone(emoji){
+      if(tone==='all')return true;
+      const hasModifier=modifiers.some(value=>emoji.includes(value));
+      return tone==='base'?!hasModifier:!hasModifier||emoji.includes(tone);
+    }
+    function renderCategories(){
+      categories.replaceChildren();
+      for(const group of groupsWithRecent){
+        const selected=category===group.name;
+        const button=el('button','all-emoji-category'+(selected?' active':''),group.icon);
+        button.type='button';
+        button.title=group.name;
+        button.setAttribute('role','tab');
+        button.setAttribute('aria-label',group.name);
+        button.setAttribute('aria-selected',String(selected));
+        button.onclick=()=>{
+          category=group.name;search.value='';shown=112;
+          renderCategories();renderResults();
+        };
+        categories.append(button);
+      }
+    }
+    function renderTones(){
+      tones.replaceChildren();
+      for(const [value,label,icon] of toneOptions){
+        const selected=tone===value;
+        const button=el('button','all-emoji-tone'+(selected?' active':''),icon);
+        button.type='button';button.title=label;
+        button.setAttribute('aria-label','Skin tone: '+label);
+        button.setAttribute('aria-pressed',String(selected));
+        button.onclick=()=>{tone=value;shown=112;renderTones();renderResults()};
+        tones.append(button);
+      }
+    }
+    function renderResults(){
+      if(actionMenu!==backdrop)return;
+      const query=search.value.trim().toLowerCase();
+      let matches;
+      if(query){
+        const words=query.split(/\s+/);
+        matches=all.filter(([emoji,name,group])=>{
+          const info=(name+' '+group).toLowerCase();
+          return words.every(word=>info.includes(word)||emoji.includes(word));
+        });
+      }else if(category==='Recent'){
+        matches=recentEmojiValues().map(emoji=>
+          known.get(emoji)||[emoji,'Recently used emoji','Recent']);
+      }else{
+        const group=groups.find(x=>x.name===category);
+        matches=group?group.emojis.map(([emoji,name])=>[emoji,name,category]):[];
+      }
+      matches=matches.filter(([emoji])=>matchesTone(emoji));
+      const previousScroll=results.scrollTop;
+      results.replaceChildren();
+      if(!matches.length){
+        results.append(el('p','all-emoji-no-results',
+          query?'No emojis match your search.':'No emojis in this category yet.'));
+      }else{
+        const grid=el('div','all-emoji-grid');
+        const fragment=document.createDocumentFragment();
+        for(const [emoji,name] of matches.slice(0,shown)){
+          const button=el('button','all-emoji-cell',emoji);
+          button.type='button';button.title=name;
+          button.setAttribute('aria-label',name);
+          button.onclick=()=>{
+            if(!me || me.uid!==initialUid || active?.id!==threadId)return;
+            rememberEmoji(emoji);
+            onSelect(emoji);
+            closeActions();
+          };
+          fragment.append(button);
+        }
+        grid.append(fragment);results.append(grid);
+        if(matches.length>shown){
+          const more=el('button','all-emoji-load-more','Show more emojis');
+          more.type='button';
+          more.onclick=()=>{shown+=112;renderResults()};
+          results.append(more);
+        }
+      }
+      results.scrollTop=previousScroll;
+      footer.textContent='Showing '+Math.min(shown,matches.length)+' of '+
+        matches.length+' · '+all.length.toLocaleString()+' emojis available';
+    }
+    search.oninput=()=>{shown=112;results.scrollTop=0;renderResults()};
+    renderCategories();renderTones();renderResults();
+  }).catch(error=>{
+    console.warn('Emoji catalog unavailable:',error);
+    if(actionMenu!==backdrop)return;
+    results.replaceChildren(el('p','all-emoji-no-results',
+      'Could not load the complete emoji library. You can still use quick reactions.'));
+    const quick=el('div','all-emoji-grid');
+    for(const [emoji,label] of REACTION_OPTIONS){
+      const button=el('button','all-emoji-cell',emoji);
+      button.type='button';button.title=label;
+      button.onclick=()=>{onSelect(emoji);closeActions()};
+      quick.append(button);
+    }
+    results.append(quick);
+    footer.textContent='Quick reactions available';
+  });
+}
+function insertEmojiIntoMessage(emoji){
+  const input=$('messageInput');
+  if(!input || !isSingleEmojiMessage(emoji))return;
+  const start=typeof input.selectionStart==='number'
+    ?input.selectionStart:input.value.length;
+  const end=typeof input.selectionEnd==='number'
+    ?input.selectionEnd:start;
+  if(input.value.length-(end-start)+emoji.length>1000){
+    status('Messages can contain up to 1000 characters.');return;
+  }
+  input.setRangeText(emoji,start,end,'end');
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+  input.focus();
+}
+$('composerEmojiBtn').onclick=()=>{
+  if(!me || !active)return;
+  showAllEmojiPicker(insertEmojiIntoMessage,active.id);
+};
+
 function showReactionPicker(item,message,node,threadId){
   if(!me || active?.id!==threadId)return;
   closeActions();
@@ -893,7 +1105,7 @@ function showReactionPicker(item,message,node,threadId){
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
     menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-124)+'px';
-    menu.style.left=Math.min(Math.max(8,rect.left),window.innerWidth-320)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.left),window.innerWidth-338)+'px';
   }
   menu.querySelector('.reaction-choice')?.focus({preventScroll:true});
 }
@@ -924,7 +1136,7 @@ function showActions(item,message,node,threadId){
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
     menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?322:270))+'px';
-    menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-338)+'px';
   }
   reply.focus({preventScroll:true});
 }
