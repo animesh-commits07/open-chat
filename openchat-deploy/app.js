@@ -5,8 +5,8 @@ import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
 import {createLiveDoodleController} from './live-doodle.js?v=doodle-screen-20261012';
-import {createAnimatedMessagesController} from './animated-messages.js?v=auto-fx-28-20261012';
-import {createMessageEffectsController} from './message-effects.js?v=auto-fx-28-20261012';
+import {createAnimatedMessagesController} from './animated-messages.js?v=manual-fx-29-20261012';
+import {createMessageEffectsController} from './message-effects.js?v=manual-fx-29-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -15,11 +15,11 @@ const persistenceReady=setPersistence(auth,browserLocalPersistence).then(()=>tru
   return false;
 });
 const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=null,stopThreads=null,users=new Map(),threads=[];let view='people',directoryCursor=null,directoryTerm='',directoryLoading=false,directoryFinished=false,directoryCount=0,peopleVersion=0,threadVersion=0;
-// Optional message effects autoplay after successful Send and on receipt.
-// Old plain messages stay compatible; shared replay remains available.
+// Optional message animations ONLY play when a participant taps ✨ Animate
+// beside the chosen message. Sending, receiving, editing and reads stay silent.
 const animatedMessages=createAnimatedMessagesController();
-// Automatic playback is driven by the original message snapshot on both
-// phones. Replays (only) are shared via the private Firestore signal.
+// A private Firestore replay event plays the message's chosen effect
+// on both phones without editing chat content or triggering on Send.
 const messageEffects=createMessageEffectsController({db,
   getContext:()=>me&&active?{threadId:active.id,uid:me.uid}:null,
   onStatus:message=>status(message),
@@ -1440,8 +1440,7 @@ function openChat(id,u){
       if(me?.uid!==ownUid || active?.id!==id)return;
       const container=$('messages');
       messageEffects.beforeMessagesRender();
-      const animatedArrivals=animatedMessages.observeSnapshot(snapshot);
-      // Reactions use the same message stream. Preserve scroll position
+       // Reactions use the same message stream. Preserve scroll position
       // on a reaction/edit update rather than jumping to the newest message.
       const atBottom=container.scrollHeight-container.scrollTop-container.clientHeight<96;
       const previousScrollTop=container.scrollTop;
@@ -1501,8 +1500,7 @@ function openChat(id,u){
         messageEffects.decorate(meta,node,item,message);
         node.append(meta);
         container.append(node);
-        animatedMessages.decorateMessage(node,message,
-          animatedArrivals.has(item.id),item.id);
+        animatedMessages.decorateMessage(node,message);
       }
       container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
       messageEffects.afterMessagesRender();
@@ -1529,9 +1527,7 @@ $('messageForm').onsubmit=async event=>{
   animatedMessages.clearSendError();
   try{
     const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
-    // A confirmed send always starts its chosen animation locally even if
-    // Firestore's snapshot was delivered before/after addDoc resolved.
-    animatedMessages.confirmSentMessage(threadId,sent.id,chosenEffect);
+    // Message is saved first; animation is available only via a later tap.
     if(active?.id===threadId){
       $('messageInput').value='';
       animatedMessages.clearSentEffect(chosenEffect);
