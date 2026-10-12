@@ -181,3 +181,27 @@
 .msg .edit-msg{border:0;background:transparent;padding:1px 3px;color:#dcf7e8;opacity:.85;font-size:15px;line-height:1.4;border-radius:5px}
 .msg .edit-msg:hover{background:rgba(255,255,255,.14);opacity:1}
 .msg .edit-msg:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+/* Lightweight, real-time emoji reactions. The existing messages listener
+   provides all reaction changes without additional Firestore subscriptions. */
+.msg .msg-meta{gap:6px;flex-wrap:wrap}
+.msg .react-trigger{min-width:28px;min-height:28px;display:inline-grid;place-items:center;background:transparent;border:0;border-radius:7px;color:#ebf6ef;font-size:20px;opacity:.86;padding:1px}
+.msg .react-trigger:hover{background:rgba(255,255,255,.13);opacity:1}
+.msg .react-trigger:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.msg .message-reactions{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:9px;max-width:100%}
+.msg .reaction-chip{border:1px solid rgba(255,255,255,.19);border-radius:14px;background:rgba(11,22,28,.26);color:#effbf4;min-height:29px;padding:3px 8px;font-size:13px;line-height:1.25;white-space:nowrap;cursor:pointer}
+.msg .reaction-chip.mine{border-color:#a0fbc5;background:rgba(15,101,62,.5)}
+.msg .reaction-chip:hover{background:rgba(255,255,255,.13)}
+.msg .reaction-chip:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.message-action-menu .reaction-choices{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;width:min(282px,calc(100vw - 72px));margin:0 0 4px}
+.message-action-menu .reaction-choices .reaction-choice{display:grid;place-items:center;min-width:0;min-height:44px;width:100%;border:1px solid transparent;border-radius:12px;padding:3px 0;text-align:center;font-size:23px;line-height:1}
+.message-action-menu .reaction-choices .reaction-choice.is-selected{border-color:var(--green);background:rgba(34,176,105,.22)}
+.message-action-menu .reaction-choices .reaction-choice:hover,.message-action-menu .reaction-choices .reaction-choice:focus-visible{background:#3b5660;outline:2px solid transparent;transform:scale(1.07)}
+.message-action-menu.reaction-action-menu{min-width:0}
+.message-action-menu .reaction-cancel{min-height:40px;text-align:center;color:var(--muted)}
+@media(max-width:700px){
+  .msg .react-trigger{min-width:30px;min-height:30px}
+  .message-action-menu .reaction-choices{width:100%}
+  .message-action-menu{max-height:calc(100dvh - 32px);overflow-y:auto}
+}
+@media(prefers-reduced-motion:reduce){.message-action-menu .reaction-choices .reaction-choice:hover{transform:none}}
