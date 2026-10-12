@@ -5,6 +5,7 @@ import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
 import {createLiveDoodleController} from './live-doodle.js?v=doodle-screen-20261012';
+import {createMessageEffectsController} from './message-effects.js?v=linked-effects-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -32,6 +33,11 @@ const liveDoodle=createLiveDoodleController({db,getContext:()=>
 $('gameToggleBtn').addEventListener('click',()=>liveDoodle.exit());
 $('quizLaunchBtn').addEventListener('click',()=>liveDoodle.exit());
 $('doodleLaunchBtn').addEventListener('click',()=>quickQuiz.close());
+// Animated effects live beside each private message, not inside message data.
+const messageEffects=createMessageEffectsController({db,
+  getContext:()=>me && active?{threadId:active.id,uid:me.uid}:null,
+  onStatus:message=>status(message)
+});
 
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
@@ -207,6 +213,7 @@ onAuthStateChanged(auth,async u=>{
   ticTacToe.close();
   quickQuiz.close();
   liveDoodle.close();
+  messageEffects.close();
   stopOwnPresence();
   stopFriendPresence();
   stopEditing(false);
@@ -1391,6 +1398,7 @@ function openChat(id,u){
   ticTacToe.close();
   quickQuiz.close();
   liveDoodle.close();
+  messageEffects.close();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1409,6 +1417,7 @@ function openChat(id,u){
   // Read-only doodle marks are visible over messages without entering draw
   // mode; touching the pen button enables canvas pointer capture.
   liveDoodle.connect(id,me.uid,u.uid,u.username);
+  messageEffects.open(id,me.uid);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -1423,6 +1432,7 @@ function openChat(id,u){
       // on a reaction/edit update rather than jumping to the newest message.
       const atBottom=container.scrollHeight-container.scrollTop-container.clientHeight<96;
       const previousScrollTop=container.scrollTop;
+      messageEffects.beforeMessagesRender();
       container.replaceChildren();
       const messages=snapshot.docs.slice().reverse();
       visibleChatDocuments=messages;
@@ -1476,6 +1486,7 @@ function openChat(id,u){
           };
           meta.append(del);
         }
+        messageEffects.decorate(meta,node,item,message);
         node.append(meta);container.append(node);
       }
       container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
@@ -1485,7 +1496,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();messageEffects.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
