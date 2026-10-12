@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=typing-diagnostics-20261011">
+  <link rel="stylesheet" href="./style.css?v=edit-20261011">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -79,6 +79,11 @@
         <section class="messages" id="messages" aria-live="polite"></section>
         <div id="chatTypingBubble" class="chat-typing-bubble hidden" role="status" aria-live="polite"><span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span><span>typing…</span></div>
         <div class="composer-area">
+          <div id="editPreview" class="edit-composer hidden" role="status" aria-live="polite">
+            <div class="edit-composer-icon" aria-hidden="true">✎</div>
+            <div class="edit-composer-content"><strong>Editing message</strong><small>Only you can edit it · 15-minute limit</small></div>
+            <button id="cancelEdit" type="button" class="edit-composer-close" aria-label="Cancel edit" title="Cancel edit">×</button>
+          </div>
           <div id="replyPreview" class="reply-composer hidden" role="status" aria-live="polite">
             <div class="reply-composer-mark" aria-hidden="true">↩</div>
             <div class="reply-composer-content">
@@ -102,6 +107,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=typing-diagnostics-20261011"></script>
+  <script type="module" src="./app.js?v=edit-20261011"></script>
 </body>
 </html>

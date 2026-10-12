@@ -164,3 +164,20 @@
 .typing-diagnostic-actions button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .typing-diagnostics small{color:var(--muted);font-size:11px;line-height:1.35}
 @media(max-width:700px){.typing-check-toggle{padding:8px 9px;font-size:11px;min-height:36px}.typing-diagnostics{max-height:230px;padding:11px 12px}}
+
+/* WhatsApp-like edit message composer. */
+.edit-composer{display:flex;align-items:center;gap:11px;min-height:64px;background:#1c2e35;border-left:3px solid var(--green);border-radius:14px;padding:10px 12px;margin-bottom:9px}
+.edit-composer-icon{color:var(--green);font-size:24px;line-height:1}
+.edit-composer-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.edit-composer-content strong{font-size:13px;color:#acffd3}
+.edit-composer-content small{font-size:11px;color:#a7bbc4}
+.edit-composer-close{flex:none;min-width:42px;min-height:42px;border:0;border-radius:11px;background:#2c4148;color:#e9f1f5;font-size:24px}
+.edit-composer-close:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.composer.editing-message .send{background:linear-gradient(145deg,#2df1a0,#0caa66);font-weight:900}
+.msg .edited-mark{font-size:10px;color:#b4d0c5;white-space:nowrap;opacity:.9}
+.msg.own .edited-mark{color:#d8e8df}
+@media(max-width:700px){.edit-composer{min-height:59px;padding:8px 10px;margin-bottom:7px}}
+
+.msg .edit-msg{border:0;background:transparent;padding:1px 3px;color:#dcf7e8;opacity:.85;font-size:15px;line-height:1.4;border-radius:5px}
+.msg .edit-msg:hover{background:rgba(255,255,255,.14);opacity:1}
+.msg .edit-msg:focus-visible{outline:2px solid var(--green);outline-offset:2px}

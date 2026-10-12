@@ -1,6 +1,6 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore,doc,setDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {getFirestore,doc,setDoc,updateDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
@@ -180,6 +180,7 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  stopEditing(false);
   closeTypingSession();
   clearReceiptWatchers();
   clearReply();closeActions();
@@ -452,6 +453,7 @@ function stopOwnTyping(){
   void queueTypingSignal(old.threadId,old.uid,false);
 }
 function onOwnTypingInput(){
+  if(editDraft){stopOwnTyping();return;}
   if(!me || !active || document.hidden || !$('messageInput').value.trim()){
     stopOwnTyping();return;
   }
@@ -677,6 +679,8 @@ function isSingleEmojiMessage(value){
 }
 
 
+const EDIT_WINDOW_MS=15*60*1000;
+let editDraft=null;
 let replyDraft=null,actionMenu=null;
 function clearReply(){
   replyDraft=null;
@@ -686,8 +690,97 @@ function clearReply(){
 }
 $('cancelReply').onclick=clearReply;
 function authorFor(uid){return uid===me?.uid?'You':'@'+(active?.other?.username||'User')}
+
+function canEditMessage(item,message){
+  const createdMs=message?.createdAt?.toMillis?.();
+  return !!me && message?.senderId===me.uid &&
+    !item?.metadata?.hasPendingWrites &&
+    typeof createdMs==='number' &&
+    createdMs<=Date.now() && Date.now()-createdMs<EDIT_WINDOW_MS;
+}
+function stopEditing(restore=true){
+  if(!editDraft)return;
+  const previous=editDraft;
+  editDraft=null;
+  $('editPreview').classList.add('hidden');
+  $('messageForm').classList.remove('editing-message');
+  $('sendBtn').textContent='➤';
+  $('sendBtn').setAttribute('aria-label','Send message');
+  $('messageInput').placeholder='Write a personal message…';
+  if(restore && active?.id===previous.threadId){
+    $('messageInput').value=previous.previousInput;
+    if(previous.previousReply){
+      replyDraft=previous.previousReply;
+      $('replyPreviewAuthor').textContent='Replying to '+authorFor(replyDraft.senderId);
+      $('replyPreviewText').textContent=replyDraft.text;
+      $('replyPreview').classList.remove('hidden');
+    }
+  }else if(!restore){
+    $('messageInput').value='';
+  }
+}
+$('cancelEdit').onclick=()=>stopEditing(true);
+function startEdit(item,message,threadId){
+  if(!me || active?.id!==threadId || message.senderId!==me.uid)return;
+  if(!canEditMessage(item,message)){
+    status('Messages can only be edited within 15 minutes of sending.');
+    closeActions();return;
+  }
+  if(editDraft)stopEditing(true);
+  const previousInput=$('messageInput').value;
+  const previousReply=replyDraft;
+  if(previousReply)clearReply();
+  editDraft={
+    threadId,id:item.id,originalText:message.text,
+    createdAtMs:message.createdAt.toMillis(),
+    previousInput,previousReply
+  };
+  stopOwnTyping();
+  $('messageInput').value=message.text;
+  $('messageInput').placeholder='Edit your message…';
+  $('editPreview').classList.remove('hidden');
+  $('messageForm').classList.add('editing-message');
+  $('sendBtn').textContent='✓';
+  $('sendBtn').setAttribute('aria-label','Save edited message');
+  closeActions();
+  $('messageInput').focus();
+}
+async function submitMessageEdit(){
+  const selected=editDraft;
+  if(!selected || !me || active?.id!==selected.threadId)return;
+  const text=clean($('messageInput').value);
+  if(!text){status('Edited message cannot be empty.');return}
+  if(text===selected.originalText){status('Change the message before saving.');return}
+  if(Date.now()-selected.createdAtMs>=EDIT_WINDOW_MS){
+    status('The 15-minute edit window has expired. Cancel to return to chat.');return;
+  }
+  $('sendBtn').disabled=true;
+  status('Saving edited message…');
+  try{
+    await updateDoc(doc(db,'threads',selected.threadId,'messages',selected.id),
+      {text,editedAt:serverTimestamp()});
+    if(editDraft===selected && active?.id===selected.threadId){
+      // Keep an unsent reply draft valid if it quotes this exact edited message.
+      if(selected.previousReply?.id===selected.id){
+        selected.previousReply={...selected.previousReply,text};
+      }
+      stopEditing(true);
+      status('Message edited');
+    }
+  }catch(error){
+    if(error?.code==='permission-denied'){
+      status('Edit blocked by Firebase rules. The new Edit Message rules must be published.');
+    }else{
+      status('Could not edit message: '+error.message);
+    }
+  }finally{
+    $('sendBtn').disabled=false;
+  }
+}
+
 function startReply(item,message,threadId){
   if(!me || active?.id!==threadId)return;
+  if(editDraft)stopEditing(true);
   if(item.metadata?.hasPendingWrites){status('Wait for this message to send first.');return}
   replyDraft={threadId,id:item.id,senderId:message.senderId,text:message.text};
   $('replyPreviewAuthor').textContent='Replying to '+authorFor(message.senderId);
@@ -713,6 +806,9 @@ function showActions(item,message,node,threadId){
   menu.setAttribute('role','group');menu.setAttribute('aria-label','Message actions');
   const reply=el('button','primary-action','↩ Reply');
   reply.type='button';reply.onclick=()=>startReply(item,message,threadId);
+  const editAllowed=canEditMessage(item,message);
+  const edit=editAllowed?el('button',null,'✎ Edit message'):null;
+  if(edit){edit.type='button';edit.onclick=()=>startEdit(item,message,threadId)}
   const copy=el('button',null,'Copy message');
   copy.type='button';copy.onclick=async()=>{
     closeActions();
@@ -721,11 +817,13 @@ function showActions(item,message,node,threadId){
   };
   const cancel=el('button',null,'Cancel');
   cancel.type='button';cancel.onclick=closeActions;
-  menu.append(reply,copy,cancel);
+  menu.append(reply);
+  if(edit)menu.append(edit);
+  menu.append(copy,cancel);
   document.body.append(menu);actionMenu=menu;
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
-    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-190)+'px';
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?240:190))+'px';
     menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
   }
   reply.focus({preventScroll:true});
@@ -805,6 +903,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  stopEditing(false);
   closeTypingSession();
   clearReply();closeActions();
   active={id,other:u};
@@ -838,6 +937,7 @@ function openChat(id,u){
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
         meta.append(el('span',null,when?when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sending…'));
+        if(message.editedAt)meta.append(el('span','edited-mark','edited'));
         const replyButton=el('button','reply-trigger','↩');
         replyButton.type='button';
         replyButton.title='Reply to this message';
@@ -850,6 +950,14 @@ function openChat(id,u){
           const label={sending:'Sending',sent:'Sent',delivered:'Delivered',seen:'Seen'}[state];
           ticks.title=label;ticks.setAttribute('role','img');ticks.setAttribute('aria-label',label);
           meta.append(ticks);
+          if(canEditMessage(item,message)){
+            const editButton=el('button','edit-msg','✎');
+            editButton.type='button';
+            editButton.title='Edit message (15 minutes)';
+            editButton.setAttribute('aria-label','Edit message');
+            editButton.onclick=()=>startEdit(item,message,id);
+            meta.append(editButton);
+          }
           const del=el('button','delete-msg','🗑');
           del.title='Delete message';
           del.onclick=async()=>{
@@ -869,9 +977,10 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{stopEditing(false);closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
+  if(editDraft){await submitMessageEdit();return}
   if(!active||!me)return;
   const text=clean($('messageInput').value);
   if(!text)return;
