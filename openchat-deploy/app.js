@@ -964,12 +964,12 @@ function showAllEmojiPicker(onSelect,threadId){
     const modifiers=['🏻','🏼','🏽','🏾','🏿'];
     const toneOptions=[
       ['all','All tones','🌈'],['base','Default','✋'],
-      ['🏻','Light','🏻'],['🏼','Light-medium','🏼'],
-      ['🏽','Medium','🏽'],['🏾','Dark-medium','🏾'],
-      ['🏿','Dark','🏿']
+      ['🏻','Light','✋🏻'],['🏼','Light-medium','✋🏼'],
+      ['🏽','Medium','✋🏽'],['🏾','Dark-medium','✋🏾'],
+      ['🏿','Dark','✋🏿']
     ];
     const groupsWithRecent=[{name:'Recent',icon:'🕘'},...groups];
-    let category=groups[0].name,tone='base',shown=112;
+    let category=groups[0].name,tone='all',shown=112;
     function matchesTone(emoji){
       if(tone==='all')return true;
       const hasModifier=modifiers.some(value=>emoji.includes(value));
