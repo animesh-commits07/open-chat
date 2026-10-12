@@ -297,3 +297,30 @@
   .typing-check-toggle{padding:6px 4px;font-size:9px}
 }
 @media(prefers-reduced-motion:reduce){.game-cell{transition:none}.game-cell.is-playable:hover{transform:none}}
+
+/* Quick Quiz companion to the existing private Tic-Tac-Toe invitation panel. */
+.game-mini-nav{display:flex;align-items:center;gap:8px}
+.quiz-launch-btn{width:100%;min-height:38px;border:1px solid rgba(128,245,174,.42);border-radius:10px;background:#285b47;color:#e3ffe9;padding:8px 12px;font-size:13px;font-weight:750;cursor:pointer}
+.quiz-launch-btn:hover{background:#317151}
+.quiz-launch-btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.quiz-panel{position:absolute;top:83px;right:14px;z-index:46;display:flex;flex-direction:column;gap:12px;width:min(348px,calc(100% - 28px));max-height:calc(100% - 94px);overflow-y:auto;overscroll-behavior:contain;padding:16px;border:1px solid rgba(102,225,166,.4);border-radius:17px;background:#25353f;box-shadow:0 18px 48px #111821}
+.quiz-panel-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.quiz-panel-header strong{font-size:15px;color:#ddfae9}
+.quiz-close-btn{width:34px;height:34px;flex:none;display:grid;place-items:center;border:0;border-radius:9px;background:#3b4e58;color:#fff;font-size:24px;line-height:1;cursor:pointer}
+.quiz-body{display:flex;flex-direction:column;gap:11px;min-width:0}
+.quiz-hint,.quiz-progress,.quiz-footer{color:#c4dacf;font-size:12px;line-height:1.45;margin:0}
+.quiz-progress{color:#a9f8cb;font-weight:750;text-align:center}
+.quiz-question{font-size:14px;line-height:1.45;color:#f2fff7;text-align:center;margin:0}
+.quiz-choices{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.quiz-choice{min-width:0;min-height:48px;padding:10px 8px;border:1px solid rgba(210,254,229,.16);background:#3a505a;border-radius:11px;color:#f5fff8;font-size:12px;font-weight:700;cursor:pointer;overflow-wrap:anywhere}
+.quiz-choice:not(:disabled):hover{background:#376a52}
+.quiz-choice:disabled{opacity:.55;cursor:wait}
+.quiz-primary{min-height:43px;padding:10px 12px;border:1px solid #65e09f;background:#178354;color:#ecfff4;border-radius:11px;font-size:13px;font-weight:750;cursor:pointer}
+.quiz-primary:disabled{opacity:.55;cursor:wait}
+.quiz-winner{text-align:center;color:#adffcc;font-size:23px;font-weight:850;margin:2px 0}
+.quiz-error{padding:9px 10px;border:1px solid #f2ba8e;background:#503625;color:#ffe1c6;border-radius:10px;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.quiz-panel button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media(max-width:700px){
+  .quiz-panel{top:70px;left:10px;right:10px;width:auto;max-height:calc(100% - 82px);padding:14px}
+  .quiz-choice{min-height:51px}
+}
