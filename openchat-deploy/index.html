@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=presence-20261012">
+  <link rel="stylesheet" href="./style.css?v=game-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -64,7 +64,21 @@
     <main class="chat-panel">
       <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Pick anyone from the People list, or search their @username to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
       <div class="chat-view hidden" id="chatView">
-        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite" title="Online status is approximate and updates using private activity timestamps.">Checking online status…</p></div><button type="button" id="typingCheckToggle" class="typing-check-toggle" aria-controls="typingDiagnostics" aria-expanded="false">Typing test</button></header>
+        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite" title="Online status is approximate and updates using private activity timestamps.">Checking online status…</p></div><button type="button" id="gameToggleBtn" class="game-toggle-btn" title="Play Tic-Tac-Toe" aria-label="Play Tic-Tac-Toe" aria-controls="gamePanel" aria-expanded="false" aria-pressed="false">🎮</button><button type="button" id="typingCheckToggle" class="typing-check-toggle" aria-controls="typingDiagnostics" aria-expanded="false">Typing test</button></header>
+        <section id="gamePanel" class="game-panel hidden" role="region" aria-label="Tic-Tac-Toe game">
+          <div class="game-panel-header">
+            <div><strong>🎮 Tic-Tac-Toe</strong><small>Private game · ❌ vs ⭕</small></div>
+            <button type="button" id="gameCloseBtn" class="game-close-btn" title="Close game panel" aria-label="Close game panel">×</button>
+          </div>
+          <p class="game-status" id="gameStatus" role="status" aria-live="polite">Invite a friend to play!</p>
+          <div class="game-board" id="gameBoard" role="group" aria-label="Tic-Tac-Toe board"></div>
+          <div class="game-buttons">
+            <button type="button" id="gamePrimaryBtn" class="game-primary-btn hidden">Invite friend</button>
+            <button type="button" id="gameSecondaryBtn" class="game-secondary-btn hidden">Cancel</button>
+          </div>
+          <p id="gameError" class="game-error hidden" role="alert"></p>
+          <small class="game-footer">Moves sync between both players · Only your turn can place a mark</small>
+        </section>
         <div id="typingDiagnostics" class="typing-diagnostics hidden" role="region" aria-label="Typing connection diagnostics">
           <strong>Typing connection check</strong>
           <p id="typingReadDiagnostic">Friend's status: waiting to connect</p>
@@ -111,6 +125,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=presence-20261012"></script>
+  <script type="module" src="./app.js?v=game-20261012"></script>
 </body>
 </html>
