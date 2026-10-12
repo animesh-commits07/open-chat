@@ -493,3 +493,6 @@
 .message-effect-more{flex:none;min-width:26px;min-height:26px;border:1px solid rgba(176,249,204,.28);border-radius:8px;background:#294a42;padding:3px 6px;color:#c9ffe2;font-weight:850;font-size:12px}
 .message-effect-more:hover{background:#397b58}
 .message-effect-more:focus-visible{outline:2px solid #b4ffd0;outline-offset:2px}
+
+/* Shared replay controller uses its own burst element, separate from legacy local-only effects. */
+.message-effect-burst{position:absolute;z-index:8;left:50%;top:43%;width:0;height:0;overflow:visible;pointer-events:none}
