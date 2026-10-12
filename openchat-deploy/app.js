@@ -869,6 +869,7 @@ function stopEditing(restore=true){
   if(!editDraft)return;
   const previous=editDraft;
   editDraft=null;
+  animatedMessages.setEditing(false);
   $('editPreview').classList.add('hidden');
   $('messageForm').classList.remove('editing-message');
   $('sendBtn').textContent='➤';
@@ -894,8 +895,8 @@ function startEdit(item,message,threadId){
     closeActions();return;
   }
   if(editDraft)stopEditing(true);
-  // Editing an existing message cannot change its original animation.
-  animatedMessages.selectEffect('');
+  // Editing preserves the original animation; sending a new effect is disabled.
+  animatedMessages.setEditing(true);
   const previousInput=$('messageInput').value;
   const previousReply=replyDraft;
   if(previousReply)clearReply();
