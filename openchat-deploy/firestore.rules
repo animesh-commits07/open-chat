@@ -378,11 +378,27 @@ service cloud.firestore {
         allow delete: if member(threadId) && request.auth.uid == uid;
       }
 
-      match /messages/{messageId} {
+      // An animation is attached to the actual message by an immutable
+      // effect choice at send-time. A single replay signal per private thread
+      // triggers the same 1-second visual burst on both clients.
+      match /messageAnimations/{animationId} {
+        function validAnimationSignal() {
+          let next = request.resource.data;
+          return next.keys().hasOnly([
+              'messageId','actor','effect','triggerId','createdAt'
+            ]) &&
+            next.keys().hasAll([
+              'messageId','actor','effect','triggerId','createdAt'
+            ]) &&
+            next.actor == request.auth.uid &&
+            next.messageId is string &&
+            next.messageId.matches('^[A-Za-z0-9]{20}
         allow get, list: if member(threadId);
         allow create: if member(threadId) &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect']) &&
           validReply(threadId) &&
+          (!('effect' in request.resource.data) ||
+            request.resource.data.effect in ['confetti','fireworks','sparkles','hearts']) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() > 0 &&
@@ -393,7 +409,7 @@ service cloud.firestore {
         // Never permit changing sender, text or creation time.
         allow update: if member(threadId) &&
           request.auth.uid != resource.data.senderId &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
           ('deliveredAt' in request.resource.data) &&
@@ -421,7 +437,7 @@ service cloud.firestore {
           resource.data.createdAt is timestamp &&
           request.time >= resource.data.createdAt &&
           request.time - resource.data.createdAt < duration.value(15, 'm') &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
           request.resource.data.text is string &&
@@ -434,7 +450,200 @@ service cloud.firestore {
         // A nested FieldPath write preserves simultaneous reactions, message edits,
         // sender/original timestamp, replies, and the delivery/read receipts.
         allow update: if member(threadId) &&
-          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
+          request.resource.data.get('reactions', {}) is map &&
+          request.resource.data.get('reactions', {}).size() <= 2 &&
+          request.resource.data.get('reactions', {}).keys().hasOnly(
+            get(/databases/$(database)/documents/threads/$(threadId)).data.members
+          ) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasAny([request.auth.uid]) &&
+          (
+            !(request.auth.uid in request.resource.data.get('reactions', {})) ||
+            (
+              request.resource.data.get('reactions', {})[request.auth.uid] is string &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() > 0 &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() <= 32
+            )
+          );
+        allow delete: if member(threadId) &&
+          resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}
+) &&
+            next.triggerId is string &&
+            next.triggerId.matches('^[A-Za-z0-9]{20}
+        allow get, list: if member(threadId);
+        allow create: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect']) &&
+          validReply(threadId) &&
+          (!('effect' in request.resource.data) ||
+            request.resource.data.effect in ['confetti','fireworks','sparkles','hearts']) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          // Use a server-issued send time, not a user-controlled timestamp.
+          request.resource.data.createdAt == request.time;
+        // Only the receiving participant may acknowledge delivery/read.
+        // Never permit changing sender, text or creation time.
+        allow update: if member(threadId) &&
+          request.auth.uid != resource.data.senderId &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
+          ('deliveredAt' in request.resource.data) &&
+          request.resource.data.deliveredAt is timestamp &&
+          (
+            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
+            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
+          ) &&
+          (
+            !('seenAt' in request.resource.data) ||
+            (
+              request.resource.data.seenAt is timestamp &&
+              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
+              (
+                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
+                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
+              )
+            )
+          );
+        // Only the author can edit the message text during the first 15 minutes.
+        // The server controls editedAt, and all other fields stay unchanged,
+        // including author, original timestamp, reply, and delivery/read ticks.
+        allow update: if member(threadId) &&
+          request.auth.uid == resource.data.senderId &&
+          resource.data.createdAt is timestamp &&
+          request.time >= resource.data.createdAt &&
+          request.time - resource.data.createdAt < duration.value(15, 'm') &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          request.resource.data.text != resource.data.text &&
+          request.resource.data.editedAt == request.time;
+        // One emoji reaction per participant, including on messages they received.
+        // The caller may change ONLY their own entry of the reactions map.
+        // A nested FieldPath write preserves simultaneous reactions, message edits,
+        // sender/original timestamp, replies, and the delivery/read receipts.
+        allow update: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
+          request.resource.data.get('reactions', {}) is map &&
+          request.resource.data.get('reactions', {}).size() <= 2 &&
+          request.resource.data.get('reactions', {}).keys().hasOnly(
+            get(/databases/$(database)/documents/threads/$(threadId)).data.members
+          ) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasAny([request.auth.uid]) &&
+          (
+            !(request.auth.uid in request.resource.data.get('reactions', {})) ||
+            (
+              request.resource.data.get('reactions', {})[request.auth.uid] is string &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() > 0 &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() <= 32
+            )
+          );
+        allow delete: if member(threadId) &&
+          resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}
+) &&
+            next.effect in ['confetti','fireworks','sparkles','hearts'] &&
+            next.createdAt == request.time &&
+            exists(/databases/$(database)/documents/threads/$(threadId)/messages/$(next.messageId)) &&
+            get(/databases/$(database)/documents/threads/$(threadId)/messages/$(next.messageId))
+              .data.get('effect','') == next.effect &&
+            request.time >= get(/databases/$(database)/documents/threads/$(threadId)/messages/$(next.messageId))
+              .data.createdAt + duration.value(1, 's');
+        }
+        allow get: if animationId == 'current' && member(threadId);
+        allow list, delete: if false;
+        allow create: if animationId == 'current' && member(threadId) &&
+          validAnimationSignal();
+        allow update: if animationId == 'current' && member(threadId) &&
+          validAnimationSignal() &&
+          request.resource.data.triggerId != resource.data.triggerId &&
+          request.time >= resource.data.createdAt + duration.value(1, 's');
+      }
+
+      match /messages/{messageId} {
+        allow get, list: if member(threadId);
+        allow create: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect']) &&
+          validReply(threadId) &&
+          (!('effect' in request.resource.data) ||
+            request.resource.data.effect in ['confetti','fireworks','sparkles','hearts']) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          // Use a server-issued send time, not a user-controlled timestamp.
+          request.resource.data.createdAt == request.time;
+        // Only the receiving participant may acknowledge delivery/read.
+        // Never permit changing sender, text or creation time.
+        allow update: if member(threadId) &&
+          request.auth.uid != resource.data.senderId &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
+          ('deliveredAt' in request.resource.data) &&
+          request.resource.data.deliveredAt is timestamp &&
+          (
+            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
+            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
+          ) &&
+          (
+            !('seenAt' in request.resource.data) ||
+            (
+              request.resource.data.seenAt is timestamp &&
+              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
+              (
+                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
+                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
+              )
+            )
+          );
+        // Only the author can edit the message text during the first 15 minutes.
+        // The server controls editedAt, and all other fields stay unchanged,
+        // including author, original timestamp, reply, and delivery/read ticks.
+        allow update: if member(threadId) &&
+          request.auth.uid == resource.data.senderId &&
+          resource.data.createdAt is timestamp &&
+          request.time >= resource.data.createdAt &&
+          request.time - resource.data.createdAt < duration.value(15, 'm') &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          request.resource.data.text != resource.data.text &&
+          request.resource.data.editedAt == request.time;
+        // One emoji reaction per participant, including on messages they received.
+        // The caller may change ONLY their own entry of the reactions map.
+        // A nested FieldPath write preserves simultaneous reactions, message edits,
+        // sender/original timestamp, replies, and the delivery/read receipts.
+        allow update: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'effect', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
           request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
           request.resource.data.get('reactions', {}) is map &&
