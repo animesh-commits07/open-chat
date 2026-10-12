@@ -170,6 +170,7 @@ async function enterApp(){
   $('searchInput').value='';
   $('authPage').classList.add('hidden');$('usernamePage').classList.add('hidden');$('appShell').classList.remove('hidden');
   view='people';showPeople('');watchThreads();updatePushButton();
+  startOwnPresence();
   void resumePushIfEnabled(me);void openNotificationChat();
 }
 $('usernameLogout').onclick=signOutWithPushCleanup;
@@ -180,6 +181,8 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  stopOwnPresence();
+  stopFriendPresence();
   stopEditing(false);
   closeTypingSession();
   clearReceiptWatchers();
@@ -336,7 +339,7 @@ const PRESENCE_HEARTBEAT_MS=45000;
 const PRESENCE_ONLINE_MS=105000;
 const PRESENCE_RENDER_MS=15000;
 const PRESENCE_PERMISSION_RETRY_MS=180000;
-let ownPresenceUid=null,ownPresenceTimer=null,ownPresenceRetryAfter=0;
+let ownPresenceUid=null,ownPresenceTimer=null,ownPresenceRetryAfter=0,ownPresenceLastAttempt=0;
 let ownPresencePermissionError=false;
 const presenceWritesInProgress=new Set();
 let stopPeerPresence=null,peerPresenceRefreshTimer=null;
@@ -347,11 +350,14 @@ function stopOwnPresence(){
   ownPresenceTimer=null;
   ownPresenceUid=null;
   ownPresenceRetryAfter=0;
+  ownPresenceLastAttempt=0;
   ownPresencePermissionError=false;
 }
 async function writeOwnPresence(uid){
   if(!me || me.uid!==uid || ownPresenceUid!==uid || document.hidden ||
-     presenceWritesInProgress.has(uid) || Date.now()<ownPresenceRetryAfter)return;
+     presenceWritesInProgress.has(uid) || Date.now()<ownPresenceRetryAfter ||
+     Date.now()-ownPresenceLastAttempt<10000)return;
+  ownPresenceLastAttempt=Date.now();
   presenceWritesInProgress.add(uid);
   try{
     await setDoc(doc(db,'presence',uid),{lastActiveAt:serverTimestamp()});
@@ -387,6 +393,7 @@ function resumeOwnPresence(){
 }
 document.addEventListener('visibilitychange',resumeOwnPresence);
 window.addEventListener('pageshow',resumeOwnPresence);
+window.addEventListener('focus',resumeOwnPresence);
 
 function stopFriendPresence(){
   if(stopPeerPresence){stopPeerPresence();stopPeerPresence=null}
@@ -597,11 +604,16 @@ function renderTypingPresence(){
   const label=$('chatPresence');
   const isFresh=remoteTyping.active && remoteTyping.updatedAt>0 &&
     Date.now()-remoteTyping.updatedAt<TYPING_EXPIRE_MS;
-  const error=typingReadError||typingWriteError;
-  const text=isFresh?'typing…':error?'Typing unavailable · check Firestore Rules':'Private one-to-one chat';
+  const typingError=typingReadError||typingWriteError;
+  // Typing stays the highest priority; unread/edit/reply state is untouched.
+  const text=isFresh?'typing…'
+    :typingError?'Typing unavailable · check Firestore Rules'
+    :friendPresenceText();
   if(label.textContent!==text)label.textContent=text;
   label.classList.toggle('is-typing',isFresh);
-  label.classList.toggle('is-error',!isFresh && error);
+  label.classList.toggle('is-online',!isFresh && !typingError && friendIsOnline() && !ownPresencePermissionError);
+  label.classList.toggle('is-error',!isFresh &&
+    (typingError || ownPresencePermissionError || !!peerPresence.error));
   $('chatTypingBubble')?.classList.toggle('hidden',!isFresh || document.hidden);
 }
 function scheduleRemoteTypingExpiry(){
@@ -1351,6 +1363,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  stopFriendPresence();
   clearReactionSaveError();
   stopEditing(false);
   closeTypingSession();
@@ -1362,6 +1375,7 @@ function openChat(id,u){
   $('chatName').textContent='@'+(u.username||'user');
   $('chatAvatar').textContent=initials(u.username);
   watchOtherTyping(id,u.uid);
+  watchFriendPresence(id,u.uid);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -1438,7 +1452,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{stopEditing(false);closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
