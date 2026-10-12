@@ -30,6 +30,7 @@ export function createAnimatedMessagesController(){
   const toggle=$('effectToggleBtn'),picker=$('effectPicker');
   const options=$('effectOptions'),hint=$('effectHint');
   let selected='',threadId=null,known=new Set(),initialized=false;
+  let playingUntil=new Map();
 
   function updateSelection(){
     const data=ANIMATED_MESSAGE_EFFECTS[selected];
@@ -81,12 +82,12 @@ export function createAnimatedMessagesController(){
 
   function beginChat(id){
     threadId=id;
-    selected='';known=new Set();initialized=false;
+    selected='';known=new Set();initialized=false;playingUntil.clear();
     updateSelection();closePicker();
   }
   function endChat(){
     threadId=null;
-    selected='';known=new Set();initialized=false;
+    selected='';known=new Set();initialized=false;playingUntil.clear();
     updateSelection();closePicker();
   }
   function currentEffect(){return validAnimatedMessageEffect(selected)?selected:''}
@@ -101,6 +102,11 @@ export function createAnimatedMessagesController(){
   function observeSnapshot(snapshot){
     const arrivals=new Set();
     if(!threadId||!snapshot?.docs)return arrivals;
+    // Bound burst tracking; notifications and reaction edits can produce
+    // several snapshot events during a short animation.
+    for(const [id,expiry] of playingUntil){
+      if(expiry<=Date.now())playingUntil.delete(id);
+    }
     if(!initialized){
       initialized=true;
       for(const item of snapshot.docs)known.add(item.id);
@@ -153,7 +159,7 @@ export function createAnimatedMessagesController(){
     setTimeout(()=>layer.remove(),2100);
     return true;
   }
-  function decorateMessage(node,message,animate){
+  function decorateMessage(node,message,animate,id){
     if(!validAnimatedMessageEffect(message?.effect))return;
     const effect=message.effect;
     node.classList.add('has-message-effect');
@@ -165,7 +171,8 @@ export function createAnimatedMessagesController(){
     button.setAttribute('aria-label',button.title);
     button.onclick=()=>play(node,effect);
     node.append(button);
-    if(animate)play(node,effect);
+    if(animate && id)playingUntil.set(id,Date.now()+1750);
+    if(animate || (id && (playingUntil.get(id)||0)>Date.now()))play(node,effect);
   }
   return {beginChat,endChat,currentEffect,clearSentEffect,
     observeSnapshot,decorateMessage,selectEffect,closePicker};
