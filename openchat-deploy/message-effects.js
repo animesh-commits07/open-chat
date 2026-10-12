@@ -2,7 +2,7 @@ import {
   collection,doc,onSnapshot,orderBy,query,limit,setDoc,serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {ANIMATED_MESSAGE_EFFECTS,validAnimatedMessageEffect}
-  from './animated-messages.js?v=auto-fx-28-20261012';
+  from './animated-messages.js?v=manual-fx-29-20261012';
 
 // A single validated signal document replays an effect around ONE chat
 // message on both devices. Never changes message text, reactions, reply,
