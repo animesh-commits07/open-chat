@@ -816,8 +816,11 @@ function myMessageReaction(message){
     ?reactions[me.uid]:null;
 }
 async function toggleMessageReaction(item,threadId,emoji){
+  // Every fully-qualified Unicode emoji is accepted, not just the quick six.
+  // isSingleEmojiMessage recognizes emoji ZWJ families, flags and skin tones.
   if(!me || active?.id!==threadId ||
-     !REACTION_OPTIONS.some(([value])=>value===emoji))return;
+     typeof emoji!=='string' || emoji.length>32 ||
+     !isSingleEmojiMessage(emoji))return;
   if(item.metadata?.hasPendingWrites){
     status('Wait for this message to finish sending.');
     closeActions();return;
@@ -861,17 +864,19 @@ function reactionChoices(item,message,threadId){
 }
 function renderReactionChips(item,message,threadId){
   const reactions=messageReactions(message);
-  const values=Object.values(reactions);
-  if(!values.some(emoji=>REACTION_OPTIONS.some(([allowed])=>allowed===emoji)))return null;
+  const values=Object.values(reactions).filter(value=>
+    typeof value==='string' && value.length<=32 && isSingleEmojiMessage(value)
+  );
+  if(!values.length)return null;
   const chips=el('div','message-reactions');
   chips.setAttribute('aria-label','Message reactions');
   const mine=myMessageReaction(message);
-  for(const [emoji,label] of REACTION_OPTIONS){
-    const count=values.filter(v=>v===emoji).length;
-    if(!count)continue;
+  const counts=new Map();
+  for(const emoji of values)counts.set(emoji,(counts.get(emoji)||0)+1);
+  for(const [emoji,count] of counts){
     const chip=el('button','reaction-chip'+(mine===emoji?' mine':''),emoji+' '+count);
     chip.type='button';
-    chip.title=mine===emoji?'Remove your '+label+' reaction':'React with '+label;
+    chip.title=mine===emoji?'Remove your reaction':'React with '+emoji;
     chip.setAttribute('aria-label',chip.title+', '+count+' total');
     chip.setAttribute('aria-pressed',String(mine===emoji));
     chip.onclick=()=>{void toggleMessageReaction(item,threadId,emoji)};
