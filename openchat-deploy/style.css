@@ -407,3 +407,10 @@
   .doodle-screen-toolbar .doodle-colors{gap:3px;padding:4px}
   .doodle-screen-toolbar .doodle-color{width:25px;height:25px}
 }
+
+/* Outside Draw mode, synced doodles are still visible to both friends.
+   All chat actions, scrolling, messages and the composer remain interactive. */
+.doodle-panel.is-viewing{z-index:2;pointer-events:none}
+.doodle-panel.is-viewing .doodle-overlay{pointer-events:none;cursor:default}
+.doodle-panel.is-viewing .doodle-screen-toolbar,
+.doodle-panel.is-viewing .doodle-hint{display:none}
