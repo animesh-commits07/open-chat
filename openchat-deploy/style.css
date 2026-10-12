@@ -438,8 +438,8 @@
 .msg-effect-hearts .msg-effect-particle{font-size:22px}
 @keyframes openchat-message-particle{
   0%{opacity:0;transform:translate(-50%,-50%) scale(.22) rotate(0deg)}
-  16%{opacity:1;transform:translate(calc(var(--dx)*.24),calc(var(--dy)*.24)) scale(1.12) rotate(15deg)}
-  69%{opacity:1;transform:translate(calc(var(--dx)*.83),calc(var(--dy)*.83)) scale(1) rotate(var(--spin))}
+  16%{opacity:1;transform:translate(var(--dx-early),var(--dy-early)) scale(1.12) rotate(15deg)}
+  69%{opacity:1;transform:translate(var(--dx-middle),var(--dy-middle)) scale(1) rotate(var(--spin))}
   100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.5) rotate(var(--spin))}
 }
 @media(max-width:700px){
