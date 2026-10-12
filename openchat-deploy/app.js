@@ -4,7 +4,7 @@ import {getFirestore,doc,FieldPath,deleteField,setDoc,updateDoc,getDoc,getDocFro
 import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
-import {createLiveDoodleController} from './live-doodle.js?v=doodle-20261012';
+import {createLiveDoodleController} from './live-doodle.js?v=doodle-screen-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -29,8 +29,8 @@ const liveDoodle=createLiveDoodleController({db,getContext:()=>
   me && active?{threadId:active.id,uid:me.uid,friendUid:active.other.uid,
     friendName:active.other.username}:null
 });
-$('gameToggleBtn').addEventListener('click',()=>liveDoodle.close());
-$('quizLaunchBtn').addEventListener('click',()=>liveDoodle.close());
+$('gameToggleBtn').addEventListener('click',()=>liveDoodle.exit());
+$('quizLaunchBtn').addEventListener('click',()=>liveDoodle.exit());
 $('doodleLaunchBtn').addEventListener('click',()=>quickQuiz.close());
 
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
@@ -1406,6 +1406,9 @@ function openChat(id,u){
   watchOtherTyping(id,u.uid);
   watchFriendPresence(id,u.uid);
   ticTacToe.open(id,me.uid,u.uid,u.username);
+  // Read-only doodle marks are visible over messages without entering draw
+  // mode; touching the pen button enables canvas pointer capture.
+  liveDoodle.connect(id,me.uid,u.uid,u.username);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');

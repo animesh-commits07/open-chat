@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=doodle-20261012">
+  <link rel="stylesheet" href="./style.css?v=doodle-screen-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -64,13 +64,13 @@
     <main class="chat-panel">
       <section class="welcome" id="chatWelcome"><div class="welcome-icon" aria-hidden="true">🔒</div><h2>Personal, private messages</h2><p>Pick anyone from the People list, or search their @username to start a one-to-one chat. Your chats are not in the old public room.</p><button class="primary small" id="mobileNewChat" type="button">Find people</button></section>
       <div class="chat-view hidden" id="chatView">
-        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite" title="Online status is approximate and updates using private activity timestamps.">Checking online status…</p></div><button type="button" id="gameToggleBtn" class="game-toggle-btn" title="Play Tic-Tac-Toe" aria-label="Play Tic-Tac-Toe" aria-controls="gamePanel" aria-expanded="false" aria-pressed="false">🎮</button><button type="button" id="typingCheckToggle" class="typing-check-toggle" aria-controls="typingDiagnostics" aria-expanded="false">Typing test</button></header>
+        <header class="topbar"><button type="button" class="back-btn" id="backToChats" aria-label="Back to conversations">‹</button><div class="chat-avatar" id="chatAvatar">?</div><div class="chat-info"><h1 id="chatName">Conversation</h1><p id="chatPresence" class="chat-presence" role="status" aria-live="polite" title="Online status is approximate and updates using private activity timestamps.">Checking online status…</p></div><button type="button" id="gameToggleBtn" class="game-toggle-btn" title="Play Tic-Tac-Toe" aria-label="Play Tic-Tac-Toe" aria-controls="gamePanel" aria-expanded="false" aria-pressed="false">🎮</button><button type="button" id="doodleLaunchBtn" class="doodle-launch-btn doodle-header-launch" title="Draw on this chat" aria-label="Draw on this chat" aria-controls="doodlePanel" aria-expanded="false" aria-pressed="false">✍️</button><button type="button" id="typingCheckToggle" class="typing-check-toggle" aria-controls="typingDiagnostics" aria-expanded="false">Typing test</button></header>
         <section id="gamePanel" class="game-panel hidden" role="region" aria-label="Tic-Tac-Toe game">
           <div class="game-panel-header">
             <div><strong>🎮 Tic-Tac-Toe</strong><small>Private game · ❌ vs ⭕</small></div>
             <button type="button" id="gameCloseBtn" class="game-close-btn" title="Close game panel" aria-label="Close game panel">×</button>
           </div>
-          <div class="game-mini-nav"><button type="button" id="quizLaunchBtn" class="quiz-launch-btn" aria-controls="quizPanel" aria-expanded="false">🧠 Quick Quiz</button><button type="button" id="doodleLaunchBtn" class="doodle-launch-btn" aria-controls="doodlePanel" aria-expanded="false">✍️ Live Doodle</button></div>
+          <div class="game-mini-nav"><button type="button" id="quizLaunchBtn" class="quiz-launch-btn" aria-controls="quizPanel" aria-expanded="false">🧠 Quick Quiz</button></div>
           <p class="game-status" id="gameStatus" role="status" aria-live="polite">Invite a friend to play!</p>
           <div class="game-board" id="gameBoard" role="group" aria-label="Tic-Tac-Toe board"></div>
           <div class="game-buttons">
@@ -86,28 +86,6 @@
           <div id="quizBody" class="quiz-body"></div>
           <small class="quiz-footer">Five questions each · Live scores · Private to this chat</small>
         </section>
-        <section id="doodlePanel" class="doodle-panel hidden" role="region" aria-label="Shared Live Doodle Battle">
-          <header class="doodle-header">
-            <div><h2>✍️ Live Doodle Battle</h2><small>Draw together in this private chat — both friends share one canvas.</small></div>
-            <button id="doodleCloseBtn" class="doodle-close-btn" type="button" title="Close drawing canvas" aria-label="Close drawing canvas">×</button>
-          </header>
-          <p id="doodleStatus" class="doodle-status" role="status" aria-live="polite">Connecting to shared canvas…</p>
-          <div class="doodle-toolbar" aria-label="Drawing tools">
-            <div id="doodleColors" class="doodle-colors" role="group" aria-label="Pen colors"></div>
-            <div id="doodleSizes" class="doodle-sizes" role="group" aria-label="Brush width"></div>
-            <button id="doodleEraserBtn" class="doodle-eraser-btn" type="button" aria-pressed="false" title="White eraser">◻ Eraser</button>
-          </div>
-          <div class="doodle-canvas-wrap">
-            <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
-            <canvas id="doodleOverlay" class="doodle-overlay" aria-label="Shared drawing canvas, draw with finger or mouse"></canvas>
-          </div>
-          <div class="doodle-bottom">
-            <small id="doodleCounter" class="doodle-counter">0 synced segments</small>
-            <button id="doodleClearBtn" class="doodle-clear-btn" type="button">Clear canvas for both</button>
-          </div>
-          <p id="doodleError" class="doodle-error hidden" role="alert"></p>
-          <small class="doodle-hint">Each friend opens 🎮 → Live Doodle. Touch or drag to draw. Changes appear on both screens when synced. Eraser paints white; Clear starts a fresh shared canvas.</small>
-        </section>
         <div id="typingDiagnostics" class="typing-diagnostics hidden" role="region" aria-label="Typing connection diagnostics">
           <strong>Typing connection check</strong>
           <p id="typingReadDiagnostic">Friend's status: waiting to connect</p>
@@ -119,8 +97,34 @@
           </div>
           <small>Open this conversation on both devices. Tap Send test on one phone and watch the other phone.</small>
         </div>
+        <div id="conversationStage" class="conversation-stage">
         <section class="messages" id="messages" aria-live="polite"></section>
         <div id="chatTypingBubble" class="chat-typing-bubble hidden" role="status" aria-live="polite"><span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span><span>typing…</span></div>
+        <section id="doodlePanel" class="doodle-panel hidden" role="region" aria-label="Draw over your private conversation">
+          <div class="doodle-canvas-wrap">
+            <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
+            <canvas id="doodleOverlay" class="doodle-overlay" aria-label="Draw directly on the chat messages with a finger or mouse"></canvas>
+          </div>
+          <div class="doodle-screen-toolbar">
+            <header class="doodle-header">
+              <div><h2>✍️ Draw on Chat</h2><small>Doodle right over your conversation — synced with your friend.</small></div>
+              <button id="doodleCloseBtn" class="doodle-close-btn" type="button" title="Finish doodling and return to chat" aria-label="Done drawing">Done ✓</button>
+            </header>
+            <div class="doodle-toolbar" aria-label="Drawing tools">
+              <div id="doodleColors" class="doodle-colors" role="group" aria-label="Pen colors"></div>
+              <div id="doodleSizes" class="doodle-sizes" role="group" aria-label="Brush width"></div>
+              <button id="doodleEraserBtn" class="doodle-eraser-btn" type="button" aria-pressed="false" title="Erase only doodle marks">⌫ Eraser</button>
+            </div>
+            <div class="doodle-bottom">
+              <small id="doodleCounter" class="doodle-counter">0 synced segments</small>
+              <button id="doodleClearBtn" class="doodle-clear-btn" type="button">Clear for both</button>
+            </div>
+            <p id="doodleStatus" class="doodle-status" role="status" aria-live="polite">Connecting to live doodles…</p>
+            <p id="doodleError" class="doodle-error hidden" role="alert"></p>
+          </div>
+          <small class="doodle-hint">Draw on the messages. Tap Done to return to normal chat.</small>
+        </section>
+        </div>
         <div class="composer-area">
           <div id="editPreview" class="edit-composer hidden" role="status" aria-live="polite">
             <div class="edit-composer-icon" aria-hidden="true">✎</div>
@@ -154,6 +158,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=doodle-20261012"></script>
+  <script type="module" src="./app.js?v=doodle-screen-20261012"></script>
 </body>
 </html>
