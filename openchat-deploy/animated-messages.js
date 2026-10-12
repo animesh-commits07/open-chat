@@ -242,6 +242,9 @@ export function createAnimatedMessagesController(){
       p.style.setProperty('--fx-y',Math.round(dy)+'px');
       p.style.setProperty('--fx-mid-x',Math.round(dx*.42)+'px');
       p.style.setProperty('--fx-mid-y',Math.round(dy*.42)+'px');
+      p.style.setProperty('--fx-outer-x',Math.round(dx*.83)+'px');
+      p.style.setProperty('--fx-outer-y',Math.round(dy*.83)+'px');
+      p.style.setProperty('--fx-half-x',Math.round(dx*.5)+'px');
       p.style.setProperty('--fx-spin',((i%2===0?1:-1)*(i*31+38))+'deg');
       p.style.setProperty('--fx-delay',(i%6)*44+'ms');
       p.style.setProperty('--fx-size',(17+(i%4)*4)+'px');
