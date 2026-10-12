@@ -247,3 +247,13 @@
 .reaction-save-error span{flex:1;min-width:0;overflow-wrap:anywhere}
 .reaction-save-error button{flex:none;width:28px;height:28px;border:0;border-radius:7px;background:rgba(255,255,255,.12);color:inherit;font-size:22px;line-height:1}
 .reaction-save-error button:focus-visible{outline:2px solid #ffd69c;outline-offset:2px}
+
+/* Private Online / Last Seen uses a Firestore heartbeat (not typing state).
+   The green dot is shown only for a fresh, server-verified heartbeat. */
+.chat-info .chat-presence.is-online{color:#89f3b8;font-weight:700}
+.chat-info .chat-presence.is-online::before{
+  content:"";display:inline-block;width:8px;height:8px;
+  margin:0 7px 1px 0;border-radius:50%;background:#38ed91;
+  box-shadow:0 0 0 3px rgba(56,237,145,.12);vertical-align:middle;
+}
+.chat-info .chat-presence:not(.is-online):not(.is-typing):not(.is-error){color:#becfc5}
