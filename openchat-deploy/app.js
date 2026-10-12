@@ -2,6 +2,7 @@ import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {getFirestore,doc,FieldPath,deleteField,setDoc,updateDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
+import {createTicTacToeController} from './tic-tac-toe.js?v=game-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -10,6 +11,12 @@ const persistenceReady=setPersistence(auth,browserLocalPersistence).then(()=>tru
   return false;
 });
 const $=id=>document.getElementById(id);let me=null,active=null,stopMessages=null,stopThreads=null,users=new Map(),threads=[];let view='people',directoryCursor=null,directoryTerm='',directoryLoading=false,directoryFinished=false,directoryCount=0,peopleVersion=0,threadVersion=0;
+// Tic-Tac-Toe is isolated from messaging, push, reactions and typing.
+// The controller is active only for the current two-person conversation.
+const ticTacToe=createTicTacToeController({db,getContext:()=>
+  me && active?{threadId:active.id,uid:me.uid,friendUid:active.other.uid}:null
+});
+
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
 const VAPID_PUBLIC_KEY='BOxyo7vxirvYAzJRedbprbSMgoVCYD389WzJ6RAFXtjOzVj0gPJL1NZu8UwZRMC5MKAcszcN4IdcvFV4cZEnR3s';
@@ -181,6 +188,7 @@ onAuthStateChanged(auth,async u=>{
   if(version!==authVersion)return;
   if(stopMessages){stopMessages();stopMessages=null}
   if(stopThreads){stopThreads();stopThreads=null}
+  ticTacToe.close();
   stopOwnPresence();
   stopFriendPresence();
   stopEditing(false);
@@ -1362,6 +1370,7 @@ function createQuote(replyTo){
 }
 
 function openChat(id,u){
+  ticTacToe.close();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1376,6 +1385,7 @@ function openChat(id,u){
   $('chatAvatar').textContent=initials(u.username);
   watchOtherTyping(id,u.uid);
   watchFriendPresence(id,u.uid);
+  ticTacToe.open(id,me.uid,u.uid,u.username);
   $('messages').replaceChildren();
   visibleChatDocuments=[];
   status('Loading messages…');
@@ -1452,7 +1462,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{ticTacToe.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
