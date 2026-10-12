@@ -1,7 +1,7 @@
-// Safe, emoji-based animations that play automatically on newly sent and
-// received private messages. Only immutable allowlisted effect IDs are stored.
-// The original message document is the shared transport for automatic play;
-// an independent per-message signal is used ONLY for manual shared replays.
+// Safe, emoji-based animations played ONLY after someone taps the message's
+// ✨ Animate button. Effect IDs are chosen at send-time and stored with the
+// private message; a separate Firestore event shares each replay to both.
+// Message delivery, edits, reactions and read receipts never auto-play effects.
 export const ANIMATED_MESSAGE_EFFECTS=Object.freeze({
   confetti:{label:"Confetti",icon:"🎉",motion:"burst",particles:["🎉","🎊","🟨","🟣","✨"]},
   fireworks:{label:"Fireworks",icon:"🎆",motion:"burst",particles:["🎆","✨","💥","🌟","⭐"]},
@@ -36,7 +36,7 @@ export const ANIMATED_MESSAGE_EFFECTS=Object.freeze({
 const AUTO_WINDOW_MS=45000;
 const INITIAL_WINDOW_MS=9000;
 const MAX_AUTOPLAY_PER_SNAPSHOT=8;
-const FX_LIFETIME_MS=2200;
+const FX_LIFETIME_MS=1150;
 
 export function validAnimatedMessageEffect(name){
   return typeof name==='string' &&
@@ -67,7 +67,7 @@ export function createAnimatedMessagesController(){
       ?'Message effect: '+data.label+'. Change effect'
       :'Choose an animated message effect');
     hint.textContent=data
-      ?data.icon+' '+data.label+' plays automatically for BOTH friends on Send!'
+      ?data.icon+' '+data.label+' selected. Send first, then tap ✨ Animate beside the message.'
       :'';
     hint.classList.toggle('hidden',!data);
     for(const option of options.children){
@@ -103,7 +103,7 @@ export function createAnimatedMessagesController(){
     button.type='button';button.className='effect-choice';
     button.dataset.effect=key;
     button.textContent=icon+' '+label;
-    button.title=key?'Automatically play '+label+' on both phones when sent'
+    button.title=key?'Attach '+label+' to the message for a later shared Animate tap'
       :'Send without an animation';
     button.setAttribute('aria-label',button.title);
     button.setAttribute('aria-pressed','false');
@@ -163,32 +163,10 @@ export function createAnimatedMessagesController(){
     if(selected===expected)selectEffect('');
   }
 
-  // New arrivals are only server-confirmed documents with a recent
-  // serverTimestamp. Ignore cached history and locally pending writes.
-  // Each message ID can autoplay once per open conversation. Reactions,
-  // read ticks, edits and other snapshot rerenders never auto-trigger.
-  // On first server load only messages from the last few seconds can play,
-  // so opening an old chat does not explode historical effects.
-  function observeSnapshot(snapshot){
-    const arrivals=new Set();
-    if(!threadId||!snapshot?.docs||snapshot.metadata?.fromCache)return arrivals;
-    const first=!initialized;
-    initialized=true;
-    let count=0;
-    for(const item of snapshot.docs){
-      if(item.metadata?.hasPendingWrites)continue;
-      if(known.has(item.id))continue;
-      known.add(item.id);
-      const message=item.data();
-      const recent=effectIsFresh(message,Date.now(),
-        first?INITIAL_WINDOW_MS:AUTO_WINDOW_MS);
-      if(recent&&validAnimatedMessageEffect(message.effect)&&
-         count<MAX_AUTOPLAY_PER_SNAPSHOT&&!autoplayed.has(item.id)){
-        arrivals.add(item.id);count++;
-      }
-    }
-    return arrivals;
-  }
+  // No autoplay on delivery or after Send: the user explicitly asked for
+  // a replay button that becomes available about one second after sending.
+  // Keep a compatibility helper so other old code cannot trigger it.
+  function observeSnapshot(){return new Set()}
 
   function reducedMotion(){
     try{return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true}
@@ -244,7 +222,7 @@ export function createAnimatedMessagesController(){
       p.style.setProperty('--fx-outer-y',Math.round(dy*.83)+'px');
       p.style.setProperty('--fx-half-x',Math.round(dx*.5)+'px');
       p.style.setProperty('--fx-spin',((i%2===0?1:-1)*(i*31+38))+'deg');
-      p.style.setProperty('--fx-delay',(i%6)*44+'ms');
+      p.style.setProperty('--fx-delay',(i%6)*25+'ms');
       p.style.setProperty('--fx-size',(17+(i%4)*4)+'px');
       scene.append(p);
     }
@@ -262,25 +240,12 @@ export function createAnimatedMessagesController(){
       el.dataset?.messageId===messageId);
     return !!node&&play(node,effect);
   }
-  function markAutoplay(id,effect){
-    if(autoplayed.has(id))return;
-    if(playMessage(id,effect)){autoplayed.add(id);queuedSent.delete(id)}
-  }
-  // Firestore's addDoc promise may resolve after the UI snapshot or before
-  // the matching bubble is mounted. Both cases cause one single autoplay.
-  function confirmSentMessage(thread,id,effect){
-    if(threadId!==thread||!validAnimatedMessageEffect(effect)||!id)return;
-    queuedSent.set(id,effect);
-    markAutoplay(id,effect);
-  }
-  function decorateMessage(node,message,animate,id){
+  // Legacy compatibility: confirming a send does NOT start any effect.
+  function confirmSentMessage(){return}
+  function decorateMessage(node,message){
     if(!validAnimatedMessageEffect(message?.effect))return;
     node.classList.add('has-message-effect');
     node.dataset.effect=message.effect;
-    if(!id)return;
-    if(animate||queuedSent.get(id)===message.effect){
-      markAutoplay(id,message.effect);
-    }
   }
   return {beginChat,endChat,setEditing,currentEffect,clearSentEffect,
     observeSnapshot,decorateMessage,confirmSentMessage,playMessage,
