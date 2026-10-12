@@ -5,6 +5,7 @@ import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
 import {createLiveDoodleController} from './live-doodle.js?v=doodle-screen-20261012';
+import {MESSAGE_EFFECTS,normalizeMessageEffect,createMessageEffectsController} from './message-effects.js?v=animated-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -32,6 +33,8 @@ const liveDoodle=createLiveDoodleController({db,getContext:()=>
 $('gameToggleBtn').addEventListener('click',()=>liveDoodle.exit());
 $('quizLaunchBtn').addEventListener('click',()=>liveDoodle.exit());
 $('doodleLaunchBtn').addEventListener('click',()=>quickQuiz.close());
+// Message effects are short-lived decorations, never Firebase listeners.
+const messageEffects=createMessageEffectsController({layer:$('messageEffectsLayer')});
 
 // One-device-one-account Firebase push subscriptions; the server selects the receiver.
 const PUSH_WORKER='https://delicate-dawn-9e2e.animeshgupta627.workers.dev';
@@ -207,6 +210,7 @@ onAuthStateChanged(auth,async u=>{
   ticTacToe.close();
   quickQuiz.close();
   liveDoodle.close();
+  messageEffects.reset();
   stopOwnPresence();
   stopFriendPresence();
   stopEditing(false);
@@ -1391,6 +1395,7 @@ function openChat(id,u){
   ticTacToe.close();
   quickQuiz.close();
   liveDoodle.close();
+  messageEffects.reset();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1413,6 +1418,11 @@ function openChat(id,u){
   visibleChatDocuments=[];
   status('Loading messages…');
   const ownUid=me.uid;
+  // Seed known IDs from the first snapshot, so opening an old conversation
+  // never replays a flood of historical animations. Live incoming additions
+  // animate once; receipt/reaction/edit snapshot updates do not retrigger.
+  const knownMessageEffectIds=new Set();
+  let hasInitialEffectSnapshot=false;
   stopMessages=onSnapshot(
     query(collection(db,'threads',id,'messages'),orderBy('createdAt','desc'),limit(300)),
     {includeMetadataChanges:true},
@@ -1426,13 +1436,32 @@ function openChat(id,u){
       container.replaceChildren();
       const messages=snapshot.docs.slice().reverse();
       visibleChatDocuments=messages;
+      const incomingEffectNodes=[];
       for(const item of messages){
+        const isFreshEffect=!knownMessageEffectIds.has(item.id);
+        knownMessageEffectIds.add(item.id);
         const message=item.data(),own=message.senderId===ownUid;
         const node=el('article','msg'+(own?' own':'')+(!message.replyTo && isSingleEmojiMessage(message.text)?' emoji-only':''));
         node.dataset.messageId=item.id;
         const quote=createQuote(message.replyTo);
         if(quote)node.append(quote);
         node.append(el('div','msg-body',message.text));
+        const effect=normalizeMessageEffect(message.effect);
+        if(effect){
+          // Persisted label + replay provide accessibility and a way to
+          // enjoy old effects without automatically animating old history.
+          const profile=MESSAGE_EFFECTS[effect];
+          const replay=el('button','message-effect-replay',profile.icon+' '+profile.label+' · Replay');
+          replay.type='button';
+          replay.title='Replay '+profile.label+' message effect';
+          replay.setAttribute('aria-label','Replay '+profile.label+' animation');
+          replay.onclick=()=>messageEffects.play(effect,node);
+          node.append(replay);
+          if(isFreshEffect&&hasInitialEffectSnapshot&&!snapshot.metadata.fromCache&&
+             !own&&!item.metadata?.hasPendingWrites){
+            incomingEffectNodes.push({effect,node});
+          }
+        }
         const reactionChips=renderReactionChips(item,message,id);
         if(reactionChips)node.append(reactionChips);
         enableReplyGesture(node,item,message,id);
@@ -1479,13 +1508,17 @@ function openChat(id,u){
         node.append(meta);container.append(node);
       }
       container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
+      hasInitialEffectSnapshot=true;
+      // At most two effects per update; never trigger on historic load.
+      for(const event of incomingEffectNodes.slice(-2))
+        messageEffects.play(event.effect,event.node);
       if(!snapshot.metadata.fromCache)markVisibleChatSeen();
       status('Private chat • latest 300 messages');
     },
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{ticTacToe.close();quickQuiz.close();liveDoodle.close();messageEffects.reset();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
@@ -1493,16 +1526,23 @@ $('messageForm').onsubmit=async event=>{
   const text=clean($('messageInput').value);
   if(!text)return;
   const threadId=active.id,sender=me,chosen=replyDraft?.threadId===active.id?replyDraft:null;
+  const effect=normalizeMessageEffect($('messageEffectSelect').value);
   const payload={senderId:sender.uid,text,createdAt:serverTimestamp()};
   if(chosen)payload.replyTo={id:chosen.id,senderId:chosen.senderId,text:chosen.text};
+  if(effect)payload.effect=effect;
   stopOwnTyping();
   $('sendBtn').disabled=true;status('Sending…');
   try{
     const sent=await addDoc(collection(db,'threads',threadId,'messages'),payload);
     if(active?.id===threadId){
       $('messageInput').value='';
+      if($('messageEffectSelect').value===effect)$('messageEffectSelect').value='';
       if(chosen && replyDraft===chosen)clearReply();
       status('Sent');
+      if(effect){
+        const sentNode=[...$('messages').children].find(n=>n.dataset.messageId===sent.id);
+        if(sentNode)messageEffects.play(effect,sentNode);
+      }
     }
     void notifyRecipient(threadId,sent.id,sender);
   }catch(error){status('Send failed: '+error.message)}
