@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=game-20261012">
+  <link rel="stylesheet" href="./style.css?v=quiz-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -70,6 +70,7 @@
             <div><strong>🎮 Tic-Tac-Toe</strong><small>Private game · ❌ vs ⭕</small></div>
             <button type="button" id="gameCloseBtn" class="game-close-btn" title="Close game panel" aria-label="Close game panel">×</button>
           </div>
+          <div class="game-mini-nav"><button type="button" id="quizLaunchBtn" class="quiz-launch-btn" aria-controls="quizPanel" aria-expanded="false">🧠 Quick Quiz</button></div>
           <p class="game-status" id="gameStatus" role="status" aria-live="polite">Invite a friend to play!</p>
           <div class="game-board" id="gameBoard" role="group" aria-label="Tic-Tac-Toe board"></div>
           <div class="game-buttons">
@@ -78,6 +79,12 @@
           </div>
           <p id="gameError" class="game-error hidden" role="alert"></p>
           <small class="game-footer">Moves sync between both players · Only your turn can place a mark</small>
+        </section>
+        <section id="quizPanel" class="quiz-panel hidden" role="region" aria-label="Quick Quiz game">
+          <div class="quiz-panel-header"><strong>🧠 Quick Quiz</strong><button id="quizCloseBtn" type="button" class="quiz-close-btn" aria-label="Close Quick Quiz" title="Close Quick Quiz">×</button></div>
+          <div id="quizError" class="quiz-error hidden" role="alert"></div>
+          <div id="quizBody" class="quiz-body"></div>
+          <small class="quiz-footer">Five questions each · Live scores · Private to this chat</small>
         </section>
         <div id="typingDiagnostics" class="typing-diagnostics hidden" role="region" aria-label="Typing connection diagnostics">
           <strong>Typing connection check</strong>
@@ -125,6 +132,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=game-20261012"></script>
+  <script type="module" src="./app.js?v=quiz-20261012"></script>
 </body>
 </html>
