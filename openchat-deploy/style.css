@@ -414,3 +414,39 @@
 .doodle-panel.is-viewing .doodle-overlay{pointer-events:none;cursor:default}
 .doodle-panel.is-viewing .doodle-screen-toolbar,
 .doodle-panel.is-viewing .doodle-hint{display:none}
+
+/* Optional Animated Messages — overlay never intercepts private chat actions. */
+.message-effect-select{flex:none;width:107px;max-width:107px;min-height:40px;padding:6px 8px;border:1px solid rgba(167,239,196,.37);border-radius:12px;background:#273b3b;color:#dcffe9;font-size:12px;font-weight:750;cursor:pointer}
+.message-effect-select:focus-visible,.message-effect-replay:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.message-effect-replay{display:inline-flex;align-items:center;gap:5px;margin:5px 0 0;padding:4px 8px;border:1px solid rgba(172,237,193,.24);border-radius:9px;background:rgba(20,35,38,.28);color:#e8ffe8;font-size:11px;line-height:1.2;cursor:pointer}
+.message-effect-replay:hover{border-color:#b8f5d0;background:rgba(20,35,38,.53)}
+.message-effects-layer{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden;isolation:isolate}
+.message-effect-burst{position:absolute;inset:0;pointer-events:none}
+.message-effect-particle{position:absolute;pointer-events:none;opacity:0;font-weight:900;font-size:17px;line-height:1;will-change:transform,opacity;text-shadow:0 2px 6px rgba(0,0,0,.18);animation:openchat-effect-burst var(--effect-duration,1700ms) ease-out var(--effect-delay,0ms) both}
+.message-effect-confetti{font-size:12px}
+.message-effect-fireworks{font-size:23px}
+.message-effect-sparkles{font-size:19px}
+.message-effect-hearts{font-size:20px}
+@keyframes openchat-effect-burst{
+  0%{opacity:0;transform:translate3d(0,0,0) scale(.3) rotate(0deg)}
+  12%{opacity:1}
+  65%{opacity:1}
+  100%{opacity:0;transform:translate3d(var(--effect-x,0px),var(--effect-y,-100px),0) scale(.9) rotate(var(--effect-rotate,360deg))}
+}
+.msg.message-effect-pulse{animation:openchat-message-pulse 650ms ease-out}
+@keyframes openchat-message-pulse{
+  0%{filter:brightness(1)}
+  40%{filter:brightness(1.4)}
+  100%{filter:brightness(1)}
+}
+@media(max-width:700px){
+  .message-effect-select{width:72px;max-width:72px;min-height:41px;padding:6px 4px;font-size:10px}
+  .composer{gap:6px}
+}
+@media(max-width:370px){
+  .message-effect-select{width:59px;max-width:59px;font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .message-effect-particle,.msg.message-effect-pulse{animation:none!important}
+  .message-effect-particle{display:none!important}
+}
