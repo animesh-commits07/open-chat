@@ -860,6 +860,13 @@ function reactionChoices(item,message,threadId){
     button.onclick=()=>{void toggleMessageReaction(item,threadId,emoji)};
     row.append(button);
   }
+  const more=el('button','reaction-choice reaction-more','＋');
+  more.type='button';
+  more.title='Browse all emojis';
+  more.setAttribute('aria-label','Browse all emojis');
+  more.onclick=()=>showAllEmojiPicker(
+    emoji=>{void toggleMessageReaction(item,threadId,emoji)},threadId);
+  row.append(more);
   return row;
 }
 function renderReactionChips(item,message,threadId){
