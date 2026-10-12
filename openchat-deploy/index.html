@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#171c22">
   <meta name="description" content="OpenChat — secure, private one-to-one chats using Google sign-in.">
   <title>OpenChat — Personal Messenger</title>
-  <link rel="stylesheet" href="./style.css?v=click-play-20261012">
+  <link rel="stylesheet" href="./style.css?v=auto-fx-28-20261012">
 </head>
 <body>
   <section class="auth-page" id="sessionLoading" role="status" aria-live="polite">
@@ -143,7 +143,8 @@
             <button id="effectToggleBtn" class="effect-toggle-btn" type="button" aria-controls="effectPicker" aria-expanded="false" aria-label="Choose a message effect">✨ Effects</button>
             <small id="effectHint" class="effect-hint hidden" role="status" aria-live="polite"></small>
             <div id="effectPicker" class="effect-picker hidden" role="group" aria-label="Choose a message animation">
-              <div class="effect-picker-heading">Add animation to your next message</div>
+              <div class="effect-picker-heading">Choose an effect — it plays automatically for BOTH friends 🎉</div>
+              <input id="effectSearch" class="effect-search" type="search" maxlength="40" placeholder="🔎 Search 28 effects…" aria-label="Search animated message effects" autocomplete="off">
               <div id="effectOptions" class="effect-options"></div>
             </div>
           </div>
@@ -170,6 +171,6 @@
       </div>
     </div>
   </section>
-  <script type="module" src="./app.js?v=click-play-20261012"></script>
+  <script type="module" src="./app.js?v=auto-fx-28-20261012"></script>
 </body>
 </html>

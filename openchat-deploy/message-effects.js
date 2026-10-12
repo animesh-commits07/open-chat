@@ -1,23 +1,21 @@
 import {
   collection,doc,onSnapshot,orderBy,query,limit,setDoc,serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {ANIMATED_MESSAGE_EFFECTS,validAnimatedMessageEffect}
+  from './animated-messages.js?v=auto-fx-28-20261012';
 
 // A single validated signal document replays an effect around ONE chat
 // message on both devices. Never changes message text, reactions, reply,
 // delivery/seen timestamps or any unrelated mini-game/doodle collections.
-export const MESSAGE_EFFECTS=[
-  {id:'confetti',emoji:'🎉',label:'Confetti'},
-  {id:'fireworks',emoji:'🎆',label:'Fireworks'},
-  {id:'sparkles',emoji:'✨',label:'Sparkles'},
-  {id:'hearts',emoji:'💖',label:'Hearts'}
-];
+export const MESSAGE_EFFECTS=Object.entries(ANIMATED_MESSAGE_EFFECTS)
+  .map(([id,data])=>({id,emoji:data.icon,label:data.label}));
 const EFFECT_NAMES=new Set(MESSAGE_EFFECTS.map(effect=>effect.id));
 
-export function createMessageEffectsController({db,getContext,onStatus}){
+export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
   const messages=document.getElementById('messages');
   let context=null,unsubscribe=null,firstServerSnapshot=false;
   let seen=new Map(),revealTimers=new Set(),choice=null;
-  let writes=new Set(),burstTimers=new Set();
+  let writes=new Set(),queuedReplay=new Map();
   const current=()=>{
     const now=getContext();
     return !!context&&!!now&&now.threadId===context.threadId&&now.uid===context.uid;
@@ -30,35 +28,18 @@ export function createMessageEffectsController({db,getContext,onStatus}){
     for(const timer of revealTimers)clearTimeout(timer);
     revealTimers.clear();
   }
+  // Both automatic arrival and manual replay share the same high-quality
+  // effect renderer, so every effect looks identical on both devices.
   function play(messageId,effect){
-    if(!current()||!EFFECT_NAMES.has(effect))return;
-    const target=Array.from(messages.children).find(node=>
-      node.dataset?.messageId===messageId);
-    if(!target)return;
-    target.querySelector('.message-effect-burst')?.remove();
-    const burst=document.createElement('div');
-    burst.className='message-effect-burst effect-'+effect;
-    burst.setAttribute('aria-hidden','true');
-    const glyph=effect==='confetti'?'◆':
-      effect==='fireworks'?'✦':effect==='hearts'?'💖':'✨';
-    for(let i=0;i<14;i++){
-      const particle=document.createElement('span');
-      particle.className='message-effect-particle';
-      particle.textContent=glyph;
-      const angle=(i*137.5+20)*Math.PI/180;
-      const distance=56+(i%4)*17;
-      particle.style.setProperty('--dx',Math.round(Math.cos(angle)*distance)+'px');
-      particle.style.setProperty('--dy',Math.round(Math.sin(angle)*distance)+'px');
-      particle.style.setProperty('--spin',(i%2?1:-1)*(95+(i%4)*70)+'deg');
-      particle.style.setProperty('--wait',(i%4)*50+'ms');
-      burst.append(particle);
+    if(!current()||!EFFECT_NAMES.has(effect))return false;
+    return !!onPlay?.(messageId,effect);
+  }
+  function afterMessagesRender(){
+    if(!current())return;
+    for(const [messageId,item] of queuedReplay){
+      if(item.expiry<=Date.now()){queuedReplay.delete(messageId);continue}
+      if(play(messageId,item.effect))queuedReplay.delete(messageId);
     }
-    target.append(burst);
-    const timer=setTimeout(()=>{
-      burst.remove();
-      burstTimers.delete(timer);
-    },1750);
-    burstTimers.add(timer);
   }
   function handleSnapshot(snapshot,original){
     if(context!==original||!current()||snapshot.metadata.fromCache)return;
@@ -74,7 +55,9 @@ export function createMessageEffectsController({db,getContext,onStatus}){
       // Never autoplay historical effects when revisiting an old chat.
       // However, an effect received during initial sync should still play.
       if(initializing && (when===0||Date.now()-when>3000))continue;
-      play(item.id,data.effect);
+      if(!play(item.id,data.effect)){
+        queuedReplay.set(item.id,{effect:data.effect,expiry:Date.now()+3000});
+      }
     }
     firstServerSnapshot=true;
   }
@@ -105,16 +88,22 @@ export function createMessageEffectsController({db,getContext,onStatus}){
     const menu=document.createElement('div');
     menu.className='message-effect-menu';
     menu.setAttribute('role','group');
-    menu.setAttribute('aria-label','Choose a message animation');
+    menu.setAttribute('aria-label','Choose a message animation to play on both phones');
     const label=document.createElement('span');
     label.className='message-effect-menu-label';
-    label.textContent='Animate this message';
+    label.textContent='Animate this message for both friends';
     menu.append(label);
+    const search=document.createElement('input');
+    search.type='search';search.className='message-effect-search';
+    search.placeholder='Search 28 effects…';
+    search.setAttribute('aria-label','Search message animations');
+    menu.append(search);
     for(const effect of MESSAGE_EFFECTS){
       const button=document.createElement('button');
       button.type='button';
       button.className='message-effect-choice';
       button.textContent=effect.emoji+' '+effect.label;
+      button.dataset.effect=effect.id;
       button.setAttribute('aria-label','Play '+effect.label+' on both phones');
       button.onclick=event=>{
         event.stopPropagation();
@@ -123,6 +112,15 @@ export function createMessageEffectsController({db,getContext,onStatus}){
       };
       menu.append(button);
     }
+    search.addEventListener('input',()=>{
+      const value=search.value.trim().toLowerCase();
+      for(const button of Array.from(menu.children)){
+        if(!button.dataset?.effect)continue;
+        const data=ANIMATED_MESSAGE_EFFECTS[button.dataset.effect];
+        button.classList.toggle('hidden',
+          !!value&&!data?.label.toLowerCase().includes(value));
+      }
+    });
     node.append(menu);
     choice={messageId,element:menu};
   }
@@ -153,19 +151,21 @@ export function createMessageEffectsController({db,getContext,onStatus}){
     button.type='button';
     button.className='effect-trigger';
     button.textContent='✨ Animate';
-    button.title='Animate this message for both friends';
-    button.setAttribute('aria-label','Animate message for both friends');
+    const action=validAnimatedMessageEffect(message.effect)?'Replay':'Animate';
+    button.title=action+' this message for both friends';
+    button.setAttribute('aria-label',action+' message for both friends');
     const remaining=Math.max(0,timestamp+1000-Date.now());
     const options=document.createElement('button');
     options.type='button';
     options.className='message-effect-more';
     options.textContent='▾';
     options.title='Choose another animation';
-    options.setAttribute('aria-label','Choose Confetti, Fireworks, Sparkles or Hearts');
+    options.setAttribute('aria-label','Choose from 28 animations');
     // Reuse the effect selected before sending when available; ordinary
     // messages default to Confetti. Either participant can replay it.
     const preset=EFFECT_NAMES.has(message.effect)?message.effect:'confetti';
-    button.textContent=(MESSAGE_EFFECTS.find(x=>x.id===preset)?.emoji||'✨')+' Animate';
+    button.textContent=(MESSAGE_EFFECTS.find(x=>x.id===preset)?.emoji||'✨')+
+      (validAnimatedMessageEffect(message.effect)?' Replay':' Animate');
     button.onclick=()=>{dismiss();void trigger(messageId,preset)};
     options.onclick=()=>showChoices(node,messageId);
     if(remaining>0){
@@ -187,10 +187,7 @@ export function createMessageEffectsController({db,getContext,onStatus}){
   function close(){
     if(unsubscribe){unsubscribe();unsubscribe=null}
     context=null;firstServerSnapshot=false;seen.clear();
-    dismiss();clearTimers();
-    for(const timer of burstTimers)clearTimeout(timer);
-    burstTimers.clear();
-    messages.querySelectorAll('.message-effect-burst').forEach(node=>node.remove());
+    dismiss();clearTimers();queuedReplay.clear();
   }
-  return {open,close,decorate,beforeMessagesRender};
+  return {open,close,decorate,beforeMessagesRender,afterMessagesRender};
 }

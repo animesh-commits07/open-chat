@@ -1,52 +1,79 @@
-// Animated private messages, built from safe local DOM and CSS animations.
-// Only four server-allowlisted effect names are ever sent to Firestore.
-// The effect is part of the original message, not a separate document.
+// Safe, emoji-based animations that play automatically on newly sent and
+// received private messages. Only immutable allowlisted effect IDs are stored.
+// The original message document is the shared transport for automatic play;
+// an independent per-message signal is used ONLY for manual shared replays.
 export const ANIMATED_MESSAGE_EFFECTS=Object.freeze({
-  confetti:{label:'Confetti',icon:'🎉',particles:['🎉','🎊','✨','🔸','💛']},
-  fireworks:{label:'Fireworks',icon:'🎆',particles:['🎆','✨','🌟','💥','⭐']},
-  sparkles:{label:'Sparkles',icon:'✨',particles:['✨','🌟','⭐','💫']},
-  hearts:{label:'Hearts',icon:'💖',particles:['💖','💕','💗','💝','❤️']}
+  confetti:{label:"Confetti",icon:"🎉",motion:"burst",particles:["🎉","🎊","🟨","🟣","✨"]},
+  fireworks:{label:"Fireworks",icon:"🎆",motion:"burst",particles:["🎆","✨","💥","🌟","⭐"]},
+  sparkles:{label:"Sparkles",icon:"✨",motion:"orbit",particles:["✨","✦","💫","⭐","🌟"]},
+  hearts:{label:"Hearts",icon:"💖",motion:"float",particles:["💖","💕","💗","❤️","💝"]},
+  balloons:{label:"Balloons",icon:"🎈",motion:"float",particles:["🎈","🎈","🎊","✨"]},
+  snow:{label:"Snowfall",icon:"❄️",motion:"fall",particles:["❄️","❅","☃️","✨"]},
+  rainbow:{label:"Rainbow",icon:"🌈",motion:"arc",particles:["🌈","❤️","🧡","💛","💚","💙","💜"]},
+  stars:{label:"Star Shower",icon:"🌠",motion:"fall",particles:["⭐","🌟","✨","🌠"]},
+  butterflies:{label:"Butterflies",icon:"🦋",motion:"flutter",particles:["🦋","🦋","✨","🌸"]},
+  flowers:{label:"Flower Bloom",icon:"🌸",motion:"float",particles:["🌸","🌺","🌷","🌼","🌻"]},
+  lightning:{label:"Thunder",icon:"⚡",motion:"flash",particles:["⚡","⚡","💥","✨"]},
+  bubbles:{label:"Bubbles",icon:"🫧",motion:"float",particles:["🫧","🫧","💧","✨"]},
+  party:{label:"Party Blast",icon:"🥳",motion:"burst",particles:["🥳","🎊","🎉","🎈","✨"]},
+  meteors:{label:"Meteor Shower",icon:"☄️",motion:"shoot",particles:["☄️","🌠","✨","⭐"]},
+  leaves:{label:"Autumn Leaves",icon:"🍁",motion:"fall",particles:["🍁","🍂","🌿","🍃"]},
+  magic:{label:"Magic Spell",icon:"🪄",motion:"orbit",particles:["🪄","✨","🔮","💫","⭐"]},
+  candy:{label:"Candy Rain",icon:"🍬",motion:"fall",particles:["🍬","🍭","🍫","🧁"]},
+  rockets:{label:"Rocket Launch",icon:"🚀",motion:"shoot",particles:["🚀","🚀","✨","🔥"]},
+  flames:{label:"Fire Burst",icon:"🔥",motion:"rise",particles:["🔥","🔥","💥","✨"]},
+  disco:{label:"Disco Party",icon:"🪩",motion:"pulse",particles:["🪩","💃","🕺","✨","🎶"]},
+  popcorn:{label:"Popcorn Pop",icon:"🍿",motion:"burst",particles:["🍿","🍿","✨","⭐"]},
+  clouds:{label:"Dream Clouds",icon:"☁️",motion:"float",particles:["☁️","☁️","🌥️","✨"]},
+  diamonds:{label:"Diamond Spark",icon:"💎",motion:"burst",particles:["💎","💠","✨","💎"]},
+  ghosts:{label:"Cute Ghosts",icon:"👻",motion:"float",particles:["👻","👻","✨","🌙"]},
+  cherry:{label:"Cherry Blossoms",icon:"🌸",motion:"fall",particles:["🌸","🌸","🌺","✨"]},
+  ocean:{label:"Ocean Waves",icon:"🌊",motion:"wave",particles:["🌊","🐬","🐚","🫧"]},
+  unicorn:{label:"Unicorn Magic",icon:"🦄",motion:"orbit",particles:["🦄","🌈","✨","💜"]},
+  sunshine:{label:"Sunshine",icon:"☀️",motion:"glow",particles:["☀️","🌞","🌻","✨"]}
 });
 
-const SPREAD=[
-  [-82,-105],[-43,-115],[13,-126],[70,-114],[110,-56],[94,8],
-  [59,82],[-5,99],[-72,83],[-105,16],[-55,-35],[36,-42]
-];
-const PLAY_WINDOW_MS=45000;
-const MAX_PER_UPDATE=3;
+const AUTO_WINDOW_MS=45000;
+const INITIAL_WINDOW_MS=9000;
+const MAX_AUTOPLAY_PER_SNAPSHOT=8;
+const FX_LIFETIME_MS=2200;
+
 export function validAnimatedMessageEffect(name){
   return typeof name==='string' &&
     Object.prototype.hasOwnProperty.call(ANIMATED_MESSAGE_EFFECTS,name);
 }
-export function effectIsFresh(message,now=Date.now()){
-  const sentAt=message?.createdAt?.toMillis?.();
-  return typeof sentAt==='number' && Number.isFinite(sentAt) &&
-    sentAt<=now+5000 && now-sentAt>=-5000 &&
-    now-sentAt<=PLAY_WINDOW_MS;
+export function effectIsFresh(message,now=Date.now(),windowMs=AUTO_WINDOW_MS){
+  const timestamp=message?.createdAt?.toMillis?.();
+  return typeof timestamp==='number' && Number.isFinite(timestamp) &&
+    timestamp<=now+5000 && now-timestamp>=-5000 && now-timestamp<=windowMs;
 }
 
 export function createAnimatedMessagesController(){
   const $=id=>document.getElementById(id);
   const toggle=$('effectToggleBtn'),picker=$('effectPicker');
   const options=$('effectOptions'),hint=$('effectHint');
+  const search=$('effectSearch');
   const sendError=$('effectSendError'),sendErrorText=$('effectSendErrorText');
   const errorDismiss=$('effectErrorDismiss');
-  let selected='',threadId=null,known=new Set(),initialized=false;
-  let playingUntil=new Map(),editing=false;
+  const messages=$('messages'),stage=$('conversationStage');
+  let selected='',threadId=null,editing=false,initialized=false;
+  let known=new Set(),autoplayed=new Set(),queuedSent=new Map();
+  let effectsOnScreen=new Set(),timers=new Set();
 
   function updateSelection(){
     const data=ANIMATED_MESSAGE_EFFECTS[selected];
     toggle.textContent=data?data.icon+' '+data.label:'✨ Effects';
-    toggle.setAttribute('aria-label',
-      data?'Message effect: '+data.label+'. Change effect':'Choose a message effect');
+    toggle.setAttribute('aria-label',data
+      ?'Message effect: '+data.label+'. Change effect'
+      :'Choose an animated message effect');
     hint.textContent=data
-      ?data.icon+' '+data.label+' will play when this message arrives.'
+      ?data.icon+' '+data.label+' plays automatically for BOTH friends on Send!'
       :'';
     hint.classList.toggle('hidden',!data);
-    for(const button of options.children){
-      const enabled=button.dataset.effect===selected;
-      button.setAttribute('aria-pressed',String(enabled));
-      button.classList.toggle('selected',enabled);
+    for(const option of options.children){
+      const enabled=option.dataset.effect===selected;
+      option.setAttribute('aria-pressed',String(enabled));
+      option.classList.toggle('selected',enabled);
     }
   }
   function clearSendError(){
@@ -55,8 +82,8 @@ export function createAnimatedMessagesController(){
   }
   function showSendError(problem){
     sendErrorText.textContent=problem?.code==='permission-denied'
-      ?'Animated message was NOT sent. Publish the latest Firestore message-effect rules and retry.'
-      :'Animated message was NOT sent. Check the connection and try again.';
+      ?'Animated message NOT sent. Publish the updated Firestore Rules and retry.'
+      :'Animated message was NOT sent. Check your connection and retry.';
     sendError.classList.remove('hidden');
   }
   errorDismiss.onclick=clearSendError;
@@ -65,46 +92,62 @@ export function createAnimatedMessagesController(){
     toggle.setAttribute('aria-expanded','false');
   }
   function selectEffect(name){
-    if(editing && name!=='')return;
+    if(editing&&name!=='')return;
     if(name!==''&&!validAnimatedMessageEffect(name))return;
-    selected=name;
-    updateSelection();
-    closePicker();
+    selected=name;updateSelection();closePicker();
   }
   const entries=[['','None','🚫'],...Object.entries(ANIMATED_MESSAGE_EFFECTS)
-    .map(([name,data])=>[name,data.label,data.icon])];
+    .map(([id,data])=>[id,data.label,data.icon])];
   for(const [key,label,icon] of entries){
-    const option=document.createElement('button');
-    option.type='button';option.className='effect-choice';
-    option.dataset.effect=key;
-    option.textContent=icon+' '+label;
-    option.title=key?'Send with '+label+' animation':'Send normally without animation';
-    option.setAttribute('aria-label',option.title);
-    option.setAttribute('aria-pressed','false');
-    option.onclick=()=>selectEffect(key);
-    options.append(option);
+    const button=document.createElement('button');
+    button.type='button';button.className='effect-choice';
+    button.dataset.effect=key;
+    button.textContent=icon+' '+label;
+    button.title=key?'Automatically play '+label+' on both phones when sent'
+      :'Send without an animation';
+    button.setAttribute('aria-label',button.title);
+    button.setAttribute('aria-pressed','false');
+    button.onclick=()=>selectEffect(key);
+    options.append(button);
   }
+  function filterEffects(){
+    const value=(search?.value||'').trim().toLowerCase();
+    for(const option of options.children){
+      const effect=ANIMATED_MESSAGE_EFFECTS[option.dataset.effect];
+      const label=effect?.label?.toLowerCase()||'none';
+      option.classList.toggle('hidden',
+        !!value&&!label.includes(value)&&!String(option.dataset.effect).includes(value));
+    }
+  }
+  if(search)search.addEventListener('input',filterEffects);
   toggle.onclick=()=>{
     if(editing)return;
-    const next=picker.classList.contains('hidden');
-    picker.classList.toggle('hidden',!next);
-    toggle.setAttribute('aria-expanded',String(next));
+    const show=picker.classList.contains('hidden');
+    picker.classList.toggle('hidden',!show);
+    toggle.setAttribute('aria-expanded',String(show));
+    if(show&&search){search.value='';filterEffects();}
   };
   picker.addEventListener('keydown',event=>{
     if(event.key==='Escape'){closePicker();toggle.focus()}
   });
   updateSelection();
 
+  function clearScenes(){
+    for(const timer of timers)clearTimeout(timer);
+    timers.clear();
+    for(const scene of effectsOnScreen)scene.remove();
+    effectsOnScreen.clear();
+  }
   function beginChat(id){
-    threadId=id;
-    selected='';editing=false;toggle.disabled=false;
-    known=new Set();initialized=false;playingUntil.clear();
+    clearScenes();
+    threadId=id;selected='';editing=false;toggle.disabled=false;
+    known=new Set();autoplayed=new Set();queuedSent.clear();initialized=false;
     updateSelection();closePicker();clearSendError();
   }
   function endChat(){
-    threadId=null;
-    selected='';editing=false;toggle.disabled=false;
-    known=new Set();initialized=false;playingUntil.clear();
+    clearScenes();
+    threadId=null;selected='';editing=false;toggle.disabled=false;
+    known=new Set();autoplayed=new Set();queuedSent.clear();initialized=false;
     updateSelection();closePicker();clearSendError();
   }
   function setEditing(value){
@@ -113,40 +156,35 @@ export function createAnimatedMessagesController(){
     if(editing)selectEffect('');
     closePicker();
   }
-  function currentEffect(){return !editing&&validAnimatedMessageEffect(selected)?selected:''}
+  function currentEffect(){
+    return !editing&&validAnimatedMessageEffect(selected)?selected:'';
+  }
   function clearSentEffect(expected){
     if(selected===expected)selectEffect('');
   }
 
-  // Track message document identity (not snapshot object identity).
-  // Seen/read/edit/reaction snapshots recreate DOM; they must never replay
-  // effects. Initial history never plays, and unverified/cache writes are
-  // never treated as newly received messages.
+  // New arrivals are only server-confirmed documents with a recent
+  // serverTimestamp. Ignore cached history and locally pending writes.
+  // Each message ID can autoplay once per open conversation. Reactions,
+  // read ticks, edits and other snapshot rerenders never auto-trigger.
+  // On first server load only messages from the last few seconds can play,
+  // so opening an old chat does not explode historical effects.
   function observeSnapshot(snapshot){
     const arrivals=new Set();
-    if(!threadId||!snapshot?.docs)return arrivals;
-    // Bound burst tracking; notifications and reaction edits can produce
-    // several snapshot events during a short animation.
-    for(const [id,expiry] of playingUntil){
-      if(expiry<=Date.now())playingUntil.delete(id);
-    }
-    if(!initialized){
-      initialized=true;
-      for(const item of snapshot.docs)known.add(item.id);
-      return arrivals;
-    }
-    let triggered=0;
+    if(!threadId||!snapshot?.docs||snapshot.metadata?.fromCache)return arrivals;
+    const first=!initialized;
+    initialized=true;
+    let count=0;
     for(const item of snapshot.docs){
+      if(item.metadata?.hasPendingWrites)continue;
       if(known.has(item.id))continue;
-      const waiting=!!item.metadata?.hasPendingWrites;
-      // A pending local write can play only after the server confirms it.
-      if(waiting)continue;
       known.add(item.id);
       const message=item.data();
-      if(triggered<MAX_PER_UPDATE && !snapshot.metadata?.fromCache &&
-         validAnimatedMessageEffect(message?.effect) && effectIsFresh(message)){
-        arrivals.add(item.id);
-        triggered++;
+      const recent=effectIsFresh(message,Date.now(),
+        first?INITIAL_WINDOW_MS:AUTO_WINDOW_MS);
+      if(recent&&validAnimatedMessageEffect(message.effect)&&
+         count<MAX_AUTOPLAY_PER_SNAPSHOT&&!autoplayed.has(item.id)){
+        arrivals.add(item.id);count++;
       }
     }
     return arrivals;
@@ -157,51 +195,94 @@ export function createAnimatedMessagesController(){
     catch{return false}
   }
   function play(node,name){
-    if(!node||!validAnimatedMessageEffect(name)||
-       reducedMotion()||document.visibilityState==='hidden')return false;
-    const existing=node.querySelector?.('.msg-effect-burst');
-    if(existing)existing.remove();
-    const layer=document.createElement('span');
-    layer.className='msg-effect-burst msg-effect-'+name;
-    layer.setAttribute('aria-hidden','true');
-    const glyphs=ANIMATED_MESSAGE_EFFECTS[name].particles;
-    for(let i=0;i<SPREAD.length;i++){
-      const [x,y]=SPREAD[i];
-      const particle=document.createElement('span');
-      particle.className='msg-effect-particle';
-      particle.textContent=glyphs[i%glyphs.length];
-      particle.style.setProperty('--dx',x+'px');
-      particle.style.setProperty('--dy',y+'px');
-      particle.style.setProperty('--dx-early',Math.round(x*.24)+'px');
-      particle.style.setProperty('--dy-early',Math.round(y*.24)+'px');
-      particle.style.setProperty('--dx-middle',Math.round(x*.83)+'px');
-      particle.style.setProperty('--dy-middle',Math.round(y*.83)+'px');
-      particle.style.setProperty('--spin',((i%2===0?1:-1)*(i*31+26))+'deg');
-      particle.style.setProperty('--delay',(i%4*65)+'ms');
-      layer.append(particle);
+    if(!node||!stage||!validAnimatedMessageEffect(name)||
+       document.visibilityState==='hidden')return false;
+    const data=ANIMATED_MESSAGE_EFFECTS[name];
+    const box=node.getBoundingClientRect?.();
+    const parent=stage.getBoundingClientRect?.();
+    if(!box||!parent||!parent.width||!parent.height)return false;
+    const centerX=Math.max(5,Math.min(parent.width-5,
+      box.left-parent.left+box.width/2));
+    const centerY=Math.max(5,Math.min(parent.height-5,
+      box.top-parent.top+Math.min(box.height/2,70)));
+    const scene=document.createElement('span');
+    scene.className='chat-fx-scene chat-fx-'+name+' chat-fx-motion-'+data.motion;
+    scene.setAttribute('aria-hidden','true');
+    scene.style.left=centerX+'px';
+    scene.style.top=centerY+'px';
+    const gentler=reducedMotion();
+    const n=gentler?1:18;
+    for(let i=0;i<n;i++){
+      const p=document.createElement('span');
+      p.className='chat-fx-particle';
+      p.textContent=data.particles[i%data.particles.length];
+      const theta=(i*137.508+17)*Math.PI/180;
+      const radius=64+(i%5)*20;
+      let dx=Math.cos(theta)*radius,dy=Math.sin(theta)*radius;
+      if(data.motion==='float'||data.motion==='rise'){
+        dx=(i%2?-1:1)*(16+(i*29)%95);
+        dy=-65-(i*13)%110;
+      }else if(data.motion==='fall'){
+        dx=(i%2?-1:1)*(20+(i*23)%108);
+        dy=65+(i*19)%110;
+      }else if(data.motion==='shoot'){
+        dx=-95+(i%7)*32;dy=-90-(i*13)%75;
+      }else if(data.motion==='arc'){
+        dx=(i-8.5)*17;dy=-Math.sin(i/18*Math.PI)*130;
+      }else if(data.motion==='wave'){
+        dx=(i-8.5)*17;dy=Math.sin(i*.95)*52-18;
+      }else if(data.motion==='flash'||data.motion==='pulse'||
+               data.motion==='glow'){
+        dx=Math.cos(theta)*(24+(i%4)*26);
+        dy=Math.sin(theta)*(24+(i%4)*26);
+      }
+      p.style.setProperty('--fx-x',Math.round(dx)+'px');
+      p.style.setProperty('--fx-y',Math.round(dy)+'px');
+      p.style.setProperty('--fx-mid-x',Math.round(dx*.42)+'px');
+      p.style.setProperty('--fx-mid-y',Math.round(dy*.42)+'px');
+      p.style.setProperty('--fx-outer-x',Math.round(dx*.83)+'px');
+      p.style.setProperty('--fx-outer-y',Math.round(dy*.83)+'px');
+      p.style.setProperty('--fx-half-x',Math.round(dx*.5)+'px');
+      p.style.setProperty('--fx-spin',((i%2===0?1:-1)*(i*31+38))+'deg');
+      p.style.setProperty('--fx-delay',(i%6)*44+'ms');
+      p.style.setProperty('--fx-size',(17+(i%4)*4)+'px');
+      scene.append(p);
     }
-    node.append(layer);
-    // Clean decorative DOM automatically even when the message is not
-    // re-rendered. Clearing it does not mutate Firebase documents.
-    setTimeout(()=>layer.remove(),2100);
+    if(gentler)scene.classList.add('chat-fx-reduced');
+    stage.append(scene);effectsOnScreen.add(scene);
+    const timer=setTimeout(()=>{
+      scene.remove();effectsOnScreen.delete(scene);timers.delete(timer);
+    },FX_LIFETIME_MS);
+    timers.add(timer);
     return true;
+  }
+  function playMessage(messageId,effect){
+    if(!threadId||!validAnimatedMessageEffect(effect))return false;
+    const node=Array.from(messages.children).find(el=>
+      el.dataset?.messageId===messageId);
+    return !!node&&play(node,effect);
+  }
+  function markAutoplay(id,effect){
+    if(autoplayed.has(id))return;
+    if(playMessage(id,effect)){autoplayed.add(id);queuedSent.delete(id)}
+  }
+  // Firestore's addDoc promise may resolve after the UI snapshot or before
+  // the matching bubble is mounted. Both cases cause one single autoplay.
+  function confirmSentMessage(thread,id,effect){
+    if(threadId!==thread||!validAnimatedMessageEffect(effect)||!id)return;
+    queuedSent.set(id,effect);
+    markAutoplay(id,effect);
   }
   function decorateMessage(node,message,animate,id){
     if(!validAnimatedMessageEffect(message?.effect))return;
-    const effect=message.effect;
     node.classList.add('has-message-effect');
-    const data=ANIMATED_MESSAGE_EFFECTS[effect];
-    const button=document.createElement('button');
-    button.type='button';button.className='msg-effect-replay';
-    button.textContent=data.icon+' '+data.label;
-    button.title='Replay '+data.label+' animation';
-    button.setAttribute('aria-label',button.title);
-    button.onclick=()=>play(node,effect);
-    node.append(button);
-    if(animate && id)playingUntil.set(id,Date.now()+1750);
-    if(animate || (id && (playingUntil.get(id)||0)>Date.now()))play(node,effect);
+    node.dataset.effect=message.effect;
+    if(!id)return;
+    if(animate||queuedSent.get(id)===message.effect){
+      markAutoplay(id,message.effect);
+    }
   }
   return {beginChat,endChat,setEditing,currentEffect,clearSentEffect,
-    observeSnapshot,decorateMessage,selectEffect,closePicker,
-    showSendError,clearSendError};
+    observeSnapshot,decorateMessage,confirmSentMessage,playMessage,
+    selectEffect,closePicker,showSendError,clearSendError};
 }

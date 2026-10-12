@@ -496,3 +496,95 @@
 
 /* Shared replay controller uses its own burst element, separate from legacy local-only effects. */
 .message-effect-burst{position:absolute;z-index:8;left:50%;top:43%;width:0;height:0;overflow:visible;pointer-events:none}
+
+/* Animated Messages v2: auto-send/receive playback and shared replay use
+   the SAME 28-effect renderer. Scene nodes live outside the rebuilt bubbles,
+   so read receipts, edits and reactions cannot interrupt an active burst. */
+.effect-search,.message-effect-search{width:100%;min-height:39px;border:1px solid rgba(168,238,193,.38);border-radius:10px;outline:0;padding:8px 10px;background:#152b34;color:#effff3;font-size:13px}
+.effect-search:focus,.message-effect-search:focus{border-color:#70e9a2;box-shadow:0 0 0 2px rgba(104,236,156,.19)}
+.effect-search::placeholder,.message-effect-search::placeholder{color:#a6c1b4}
+.effect-picker{max-height:min(58dvh,460px);width:min(430px,calc(100vw - 26px))}
+.effect-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.effect-choice{min-height:42px;padding:8px 6px;transition:background .15s,border-color .15s}
+.message-effect-menu{max-height:min(58dvh,430px);overflow-y:auto;overscroll-behavior:contain;grid-template-columns:repeat(2,minmax(0,1fr))}
+.message-effect-menu .message-effect-search{grid-column:1/-1}
+.message-effect-choice{line-height:1.35;white-space:normal}
+.chat-fx-scene{position:absolute;z-index:24;left:50%;top:50%;width:0;height:0;pointer-events:none;overflow:visible;isolation:isolate}
+.chat-fx-particle{position:absolute;display:block;top:0;left:0;line-height:1;white-space:nowrap;font-size:var(--fx-size,24px);opacity:0;transform:translate(-50%,-50%) scale(.25);transform-origin:center;filter:drop-shadow(0 3px 7px rgba(0,0,0,.22));animation:chat-fx-explode 1850ms cubic-bezier(.19,.7,.25,1) var(--fx-delay,0ms) both}
+.chat-fx-motion-float .chat-fx-particle,.chat-fx-motion-rise .chat-fx-particle{animation-name:chat-fx-float;animation-duration:1950ms}
+.chat-fx-motion-fall .chat-fx-particle{animation-name:chat-fx-fall;animation-duration:2000ms}
+.chat-fx-motion-orbit .chat-fx-particle,.chat-fx-motion-flutter .chat-fx-particle{animation-name:chat-fx-orbit;animation-duration:1950ms}
+.chat-fx-motion-arc .chat-fx-particle{animation-name:chat-fx-arc}
+.chat-fx-motion-shoot .chat-fx-particle{animation-name:chat-fx-shoot}
+.chat-fx-motion-wave .chat-fx-particle{animation-name:chat-fx-wave;animation-duration:1850ms}
+.chat-fx-motion-flash .chat-fx-particle,.chat-fx-motion-pulse .chat-fx-particle,.chat-fx-motion-glow .chat-fx-particle{animation-name:chat-fx-glow;animation-duration:1600ms}
+.chat-fx-fireworks .chat-fx-particle,.chat-fx-meteors .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(255,207,99,.9))}
+.chat-fx-sparkles .chat-fx-particle,.chat-fx-magic .chat-fx-particle,.chat-fx-diamonds .chat-fx-particle,.chat-fx-stars .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(255,252,173,.85))}
+.chat-fx-hearts .chat-fx-particle,.chat-fx-cherry .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(255,131,177,.58))}
+.chat-fx-lightning .chat-fx-particle{filter:drop-shadow(0 0 8px rgba(253,240,115,.9))}
+.chat-fx-confetti .chat-fx-particle:nth-child(3n){filter:hue-rotate(48deg) drop-shadow(0 2px 2px rgba(0,0,0,.17))}
+.chat-fx-party .chat-fx-particle:nth-child(4n){filter:hue-rotate(25deg)}
+.chat-fx-motion-flutter .chat-fx-particle:nth-child(even){animation-direction:alternate-reverse}
+@keyframes chat-fx-explode{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.14) rotate(0deg)}
+  17%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% + var(--fx-mid-y))) scale(1.2) rotate(15deg)}
+  62%{opacity:1;transform:translate(calc(-50% + var(--fx-outer-x)),calc(-50% + var(--fx-outer-y))) scale(1) rotate(var(--fx-spin))}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(.45) rotate(var(--fx-spin))}
+}
+@keyframes chat-fx-float{
+  0%{opacity:0;transform:translate(-50%,15px) scale(.35) rotate(-15deg)}
+  25%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% + var(--fx-mid-y))) scale(1.1) rotate(5deg)}
+  75%{opacity:.95;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(1) rotate(-7deg)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y) - 22px)) scale(.85) rotate(15deg)}
+}
+@keyframes chat-fx-fall{
+  0%{opacity:0;transform:translate(calc(-50% + var(--fx-half-x)),-110px) scale(.7) rotate(-24deg)}
+  15%{opacity:1}
+  77%{opacity:1}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(1) rotate(var(--fx-spin))}
+}
+@keyframes chat-fx-orbit{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.22) rotate(0deg)}
+  27%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% - var(--fx-mid-y))) scale(1.15) rotate(100deg)}
+  69%{opacity:.97;transform:translate(calc(-50% - var(--fx-mid-x)),calc(-50% + var(--fx-mid-y))) scale(.9) rotate(220deg)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(.7) rotate(var(--fx-spin))}
+}
+@keyframes chat-fx-arc{
+  0%{opacity:0;transform:translate(-50%,0) scale(.2)}
+  26%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% + var(--fx-y))) scale(1.12)}
+  66%{opacity:1;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(1)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y) + 16px)) scale(.68)}
+}
+@keyframes chat-fx-shoot{
+  0%{opacity:0;transform:translate(-50%,34px) rotate(23deg) scale(.35)}
+  20%{opacity:1}
+  70%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% + var(--fx-mid-y))) rotate(-20deg) scale(1.15)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) rotate(-38deg) scale(.5)}
+}
+@keyframes chat-fx-wave{
+  0%{opacity:0;transform:translate(calc(-50% - 95px),0) scale(.35)}
+  30%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% - 35px)) scale(1.1)}
+  70%{opacity:.9}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(.6)}
+}
+@keyframes chat-fx-glow{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}
+  25%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% + var(--fx-mid-y))) scale(1.35)}
+  50%{opacity:.82;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(1.1)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(.6)}
+}
+.chat-fx-reduced .chat-fx-particle{animation:chat-fx-reduced 750ms ease-out both!important;filter:none!important}
+@keyframes chat-fx-reduced{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.9)}
+  33%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1)}
+}
+@media(max-width:700px){
+  .chat-fx-scene{transform:scale(.78);transform-origin:center}
+  .effect-picker{max-height:min(55dvh,410px);width:min(390px,calc(100vw - 24px))}
+  .message-effect-menu{max-height:min(50dvh,350px)}
+  .effect-choice{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .chat-fx-particle{animation:chat-fx-reduced 750ms ease-out both!important;filter:none!important}
+}
