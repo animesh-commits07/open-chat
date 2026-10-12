@@ -806,6 +806,21 @@ const REACTION_OPTIONS=[
 // Reactions share the existing message listener; no per-message listeners,
 // separate documents, or extra Cloudflare requests are necessary.
 const reactionWrites=new Set();
+// Snapshot updates can overwrite the ordinary status line just as Firestore
+// rolls an optimistic reaction back. Keep backend errors in a separate banner.
+function clearReactionSaveError(){
+  $('reactionSaveError').classList.add('hidden');
+  $('reactionSaveErrorText').textContent='';
+}
+function showReactionSaveError(error){
+  const message=error?.code==='permission-denied'
+    ?'Reaction was NOT saved. Firebase denied permission. The site owner needs to publish the latest Firestore reaction rules.'
+    :'Reaction was NOT saved: '+(error?.message||'Unknown error');
+  $('reactionSaveErrorText').textContent=message;
+  $('reactionSaveError').classList.remove('hidden');
+  status('Reaction not saved');
+}
+$('reactionErrorDismiss').onclick=clearReactionSaveError;
 function messageReactions(message){
   const value=message?.reactions;
   return value && typeof value==='object' && !Array.isArray(value)?value:{};
@@ -836,12 +851,9 @@ async function toggleMessageReaction(item,threadId,emoji){
     await updateDoc(doc(db,'threads',threadId,'messages',item.id),
       new FieldPath('reactions',uid),
       previous===emoji?deleteField():emoji);
+    if(me?.uid===uid && active?.id===threadId)clearReactionSaveError();
   }catch(error){
-    if(me?.uid===uid && active?.id===threadId){
-      status(error?.code==='permission-denied'
-        ?'Reactions blocked by Firebase rules. Publish the updated reaction rules.'
-        :'Could not update reaction: '+error.message);
-    }
+    if(me?.uid===uid && active?.id===threadId)showReactionSaveError(error);
   }finally{
     reactionWrites.delete(key);
   }
@@ -1215,6 +1227,7 @@ function createQuote(replyTo){
 
 function openChat(id,u){
   if(stopMessages)stopMessages();
+  clearReactionSaveError();
   stopEditing(false);
   closeTypingSession();
   clearReply();closeActions();

@@ -240,3 +240,10 @@
   .composer-emoji-btn{width:40px;height:51px}
 }
 @media(max-width:375px){.all-emoji-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.all-emoji-cell{font-size:24px}}
+
+/* Persist reaction-save failures independently from live chat status updates.
+   Firestore first shows optimistic emoji writes, then rolls them back if denied. */
+.reaction-save-error{display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:10px 12px;border:1px solid rgba(252,179,126,.65);border-radius:11px;background:#483023;color:#ffe5ca;font-size:12px;font-weight:600;line-height:1.4}
+.reaction-save-error span{flex:1;min-width:0;overflow-wrap:anywhere}
+.reaction-save-error button{flex:none;width:28px;height:28px;border:0;border-radius:7px;background:rgba(255,255,255,.12);color:inherit;font-size:22px;line-height:1}
+.reaction-save-error button:focus-visible{outline:2px solid #ffd69c;outline-offset:2px}
