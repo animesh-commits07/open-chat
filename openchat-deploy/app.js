@@ -2,6 +2,7 @@ import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase
 import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {getFirestore,doc,FieldPath,deleteField,setDoc,updateDoc,getDoc,getDocFromServer,collection,query,where,getDocs,limit,onSnapshot,addDoc,deleteDoc,serverTimestamp,orderBy,documentId,startAt,startAfter,endAt,runTransaction} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {firebaseConfig} from './firebase-config.js';
+import {createChatMiniGames} from './games.js?v=mini-games-20261012';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -183,6 +184,7 @@ onAuthStateChanged(auth,async u=>{
   if(stopThreads){stopThreads();stopThreads=null}
   stopOwnPresence();
   stopFriendPresence();
+  miniGames.close();
   stopEditing(false);
   closeTypingSession();
   clearReceiptWatchers();
@@ -1361,7 +1363,17 @@ function createQuote(replyTo){
   return q;
 }
 
+
+// Private turn-based games live in separate Firestore documents, never in
+// messages or receipt/typing/presence docs. No listeners until games are opened.
+const miniGames=createChatMiniGames({
+  db,doc,FieldPath,onSnapshot,runTransaction,serverTimestamp,
+  getUser:()=>me,getChat:()=>active,
+  panel:$('miniGamesPanel'),launchButton:$('miniGamesBtn')
+});
+
 function openChat(id,u){
+  miniGames.close();
   if(stopMessages)stopMessages();
   stopFriendPresence();
   clearReactionSaveError();
@@ -1452,7 +1464,7 @@ function openChat(id,u){
     error=>status('Could not load messages: '+error.message)
   );
 }
-$('backToChats').onclick=()=>{stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
+$('backToChats').onclick=()=>{miniGames.close();stopEditing(false);stopFriendPresence();closeTypingSession();clearReply();closeActions();$('appShell').classList.remove('chat-open')};
 $('messageForm').onsubmit=async event=>{
   event.preventDefault();
   if(editDraft){await submitMessageEdit();return}
