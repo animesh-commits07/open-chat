@@ -329,3 +329,42 @@
    Pending marks are visually distinct but are never treated as saved. */
 .game-cell.is-pending{border-color:#acf9cf;box-shadow:inset 0 0 0 2px rgba(113,244,169,.45);opacity:.75}
 .quiz-hint{overflow-wrap:anywhere}
+
+/* Live Doodle Battle is scoped to a private 1:1 chat, independent of messages. */
+.game-mini-nav{display:flex;flex-wrap:wrap}
+.game-mini-nav .quiz-launch-btn,.game-mini-nav .doodle-launch-btn{flex:1 1 135px;width:auto}
+.doodle-launch-btn{min-height:38px;border:1px solid rgba(255,203,117,.45);border-radius:10px;background:#584932;color:#ffedcf;padding:8px 12px;font-size:13px;font-weight:750;cursor:pointer}
+.doodle-launch-btn:hover{background:#685537}
+.doodle-panel{position:absolute;top:82px;right:12px;z-index:47;display:flex;flex-direction:column;gap:12px;width:min(760px,calc(100% - 24px));max-height:calc(100% - 92px);overflow-y:auto;overscroll-behavior:contain;padding:16px;background:#22313b;color:#e9f8ef;border:1px solid rgba(126,229,170,.43);border-radius:18px;box-shadow:0 20px 52px rgba(3,12,16,.8)}
+.doodle-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.doodle-header h2{font-size:18px;margin:0 0 4px;color:#bdfbd4}
+.doodle-header small{font-size:12px;color:#bfd4c8;line-height:1.45}
+.doodle-close-btn{flex:none;min-width:38px;min-height:38px;border:0;border-radius:10px;background:#354953;color:#fff;font-size:27px;line-height:1}
+.doodle-status{font-size:12px;line-height:1.45;color:#bdeccc;margin:0}
+.doodle-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.doodle-colors,.doodle-sizes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.doodle-colors{padding:5px 6px;border-radius:11px;background:#182630}
+.doodle-color{width:32px;height:32px;border:2px solid rgba(255,255,255,.27);border-radius:50%;cursor:pointer;flex:none}
+.doodle-color.selected{outline:2px solid #d0ffd7;outline-offset:2px}
+.doodle-size,.doodle-eraser-btn{min-height:36px;padding:6px 11px;border:1px solid #6c8380;border-radius:9px;background:#37494f;color:#f2faf7;font-size:12px;font-weight:700;cursor:pointer}
+.doodle-size.selected,.doodle-eraser-btn.selected{background:#237349;border-color:#a4f6c5}
+.doodle-canvas-wrap{position:relative;aspect-ratio:16/10;width:100%;max-height:480px;overflow:hidden;border:2px solid rgba(178,216,190,.75);border-radius:13px;background:#fff;box-shadow:inset 0 0 8px rgba(0,0,0,.1)}
+.doodle-canvas,.doodle-overlay{display:block;width:100%;height:100%}
+.doodle-overlay{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+.doodle-overlay.is-waiting{cursor:wait}
+.doodle-bottom{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.doodle-counter{font-size:11px;color:#bad6c5}
+.doodle-clear-btn{border:1px solid rgba(248,171,131,.55);background:#563d37;color:#ffebe1;padding:9px 14px;border-radius:10px;min-height:40px;font-size:12px;font-weight:750}
+.doodle-clear-btn:disabled{opacity:.55}
+.doodle-hint{color:#b9cbbf;font-size:11px;line-height:1.4}
+.doodle-error{margin:0;padding:10px;border:1px solid #d69b77;border-radius:9px;background:#533528;color:#ffe4cf;overflow-wrap:anywhere;font-size:12px;line-height:1.4}
+.doodle-panel button:focus-visible,.doodle-launch-btn:focus-visible{outline:2px solid #b7ffcf;outline-offset:2px}
+@media(max-width:700px){
+  .doodle-panel{top:70px;right:5px;left:5px;width:auto;max-height:calc(100% - 78px);padding:12px;border-radius:14px;gap:10px}
+  .doodle-header h2{font-size:16px}
+  .doodle-colors{gap:5px}
+  .doodle-color{width:29px;height:29px}
+  .doodle-size,.doodle-eraser-btn{padding:6px 8px;font-size:11px}
+  .doodle-canvas-wrap{aspect-ratio:5/4}
+}
+@media(prefers-reduced-motion:reduce){.doodle-color,.doodle-size,.doodle-eraser-btn{transition:none}}
