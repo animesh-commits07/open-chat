@@ -223,6 +223,92 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Private Quick Quiz, separate from the existing Tic-Tac-Toe
+      // /games/current invitation document. No game or chat schema changes.
+      function quizMembers() {
+        return get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+      }
+      function quizCreateValid() {
+        return request.resource.data.keys().hasOnly([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.keys().hasAll([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == 0 &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+      }
+      function quizNextAnswer(before,after,index,n) {
+        return before.size() == n &&
+          after.size() == n + 1 &&
+          !(index in before) &&
+          after.get(index,-1) is int &&
+          after.get(index,-1) >= 0 &&
+          after.get(index,-1) <= 3 &&
+          after.diff(before).affectedKeys().hasOnly([index]) &&
+          after.diff(before).addedKeys().hasAll([index]);
+      }
+      function quizOwnAnswerChanged() {
+        let old = resource.data.answers;
+        let next = request.resource.data.answers;
+        let before = old.get(request.auth.uid,{});
+        let after = next.get(request.auth.uid,{});
+        return old is map && next is map &&
+          before is map && after is map &&
+          next.size() <= 2 &&
+          next.keys().hasOnly(quizMembers()) &&
+          next.diff(old).affectedKeys().hasOnly([request.auth.uid]) &&
+          next.diff(old).affectedKeys().hasAll([request.auth.uid]) &&
+          after.keys().hasOnly(['0','1','2','3','4']) &&
+          (
+            quizNextAnswer(before,after,'0',0) ||
+            quizNextAnswer(before,after,'1',1) ||
+            quizNextAnswer(before,after,'2',2) ||
+            quizNextAnswer(before,after,'3',3) ||
+            quizNextAnswer(before,after,'4',4)
+          );
+      }
+      function quizAnswerValid() {
+        return request.resource.data.round == resource.data.round &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['answers','updatedAt']) &&
+          quizOwnAnswerChanged();
+      }
+      function quizBothFinished() {
+        return resource.data.answers.get(quizMembers()[0],{}).size() == 5 &&
+          resource.data.answers.get(quizMembers()[1],{}).size() == 5;
+      }
+      function quizRestartValid() {
+        return (
+            quizBothFinished() ||
+            (
+              request.time >= resource.data.updatedAt &&
+              request.time - resource.data.updatedAt >= duration.value(1,'h')
+            )
+          ) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == resource.data.round + 1 &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','round','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['round','updatedAt']);
+      }
+      match /quizzes/{quizId} {
+        allow get: if quizId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if quizId == 'current' && member(threadId) &&
+          quizCreateValid();
+        allow update: if quizId == 'current' && member(threadId) &&
+          (quizAnswerValid() || quizRestartValid());
+        allow delete: if false;
+      }
+
       // Ephemeral activity status: only chat members can read the other person's
       // status, and only the signed-in user may update their OWN document.
       match /typing/{uid} {
