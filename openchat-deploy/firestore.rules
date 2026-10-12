@@ -110,6 +110,954 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
       allow delete: if false;
 
+      // Live Doodle Battle: separate from chat messages and game state.
+      // A single shared room document selects the current private canvas.
+      // Every stroke segment is immutable, author-owned, size-limited and
+      // visible only inside the current session to the two chat members.
+      match /doodles/{roomId} {
+        allow get: if roomId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if roomId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(['session','createdAt','updatedAt']) &&
+          request.resource.data.keys().hasAll(['session','createdAt','updatedAt']) &&
+          request.resource.data.session is string &&
+          request.resource.data.session.matches('^[A-Za-z0-9]{20}
+      // Its fixed path prevents unbounded game invitation documents.
+      // Only conversation members may inspect or change the match.
+      function gameFields() {
+        return ['xUid','oUid','board','turn','state','winner','createdAt','updatedAt'];
+      }
+      function newGameInvitation(threadId) {
+        let data = request.resource.data;
+        let participants = get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+        return data.keys().hasOnly(gameFields()) &&
+          data.keys().hasAll(gameFields()) &&
+          data.xUid == request.auth.uid &&
+          data.xUid is string && data.oUid is string &&
+          data.xUid != data.oUid &&
+          participants.hasAll([data.xUid,data.oUid]) &&
+          data.board == ['', '', '', '', '', '', '', '', ''] &&
+          data.turn == 'X' &&
+          data.state == 'invited' &&
+          data.winner == '' &&
+          data.createdAt == request.time &&
+          data.updatedAt == request.time;
+      }
+      function gameWinner(b, symbol) {
+        return (b[0]==symbol && b[1]==symbol && b[2]==symbol) ||
+          (b[3]==symbol && b[4]==symbol && b[5]==symbol) ||
+          (b[6]==symbol && b[7]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[3]==symbol && b[6]==symbol) ||
+          (b[1]==symbol && b[4]==symbol && b[7]==symbol) ||
+          (b[2]==symbol && b[5]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[4]==symbol && b[8]==symbol) ||
+          (b[2]==symbol && b[4]==symbol && b[6]==symbol);
+      }
+      function gameChangedCells(before, after) {
+        return (before[0]==after[0] ? 0 : 1) +
+          (before[1]==after[1] ? 0 : 1) +
+          (before[2]==after[2] ? 0 : 1) +
+          (before[3]==after[3] ? 0 : 1) +
+          (before[4]==after[4] ? 0 : 1) +
+          (before[5]==after[5] ? 0 : 1) +
+          (before[6]==after[6] ? 0 : 1) +
+          (before[7]==after[7] ? 0 : 1) +
+          (before[8]==after[8] ? 0 : 1);
+      }
+      function gameAddsOnlyOwnMark(before, after, mark) {
+        return (before[0]==after[0] || (before[0]=='' && after[0]==mark)) &&
+          (before[1]==after[1] || (before[1]=='' && after[1]==mark)) &&
+          (before[2]==after[2] || (before[2]=='' && after[2]==mark)) &&
+          (before[3]==after[3] || (before[3]=='' && after[3]==mark)) &&
+          (before[4]==after[4] || (before[4]=='' && after[4]==mark)) &&
+          (before[5]==after[5] || (before[5]=='' && after[5]==mark)) &&
+          (before[6]==after[6] || (before[6]=='' && after[6]==mark)) &&
+          (before[7]==after[7] || (before[7]=='' && after[7]==mark)) &&
+          (before[8]==after[8] || (before[8]=='' && after[8]==mark));
+      }
+      function validGameResponse() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return before.state in ['invited','playing'] &&
+          after.board == before.board &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.turn == before.turn && after.winner == before.winner &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(['state','updatedAt']) &&
+          (
+            (before.state == 'invited' &&
+              ((request.auth.uid == before.oUid && after.state in ['playing','declined']) ||
+               (request.auth.uid == before.xUid && after.state == 'cancelled'))) ||
+            (before.state == 'playing' &&
+              request.auth.uid in [before.xUid, before.oUid] &&
+              after.state == 'cancelled')
+          );
+      }
+      function validGameMove() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let mark = before.turn;
+        return before.state == 'playing' &&
+          mark in ['X','O'] &&
+          ((mark=='X' && request.auth.uid == before.xUid) ||
+           (mark=='O' && request.auth.uid == before.oUid)) &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(
+            ['board','turn','state','winner','updatedAt']
+          ) &&
+          after.board is list && after.board.size() == 9 &&
+          gameChangedCells(before.board,after.board) == 1 &&
+          gameAddsOnlyOwnMark(before.board,after.board,mark) &&
+          after.turn == (mark=='X' ? 'O' : 'X') &&
+          after.winner == (gameWinner(after.board,mark) ? mark : '') &&
+          after.state == (gameWinner(after.board,mark)
+            ? 'won' : ('' in after.board ? 'playing' : 'draw'));
+      }
+      match /games/{gameId} {
+        // The client uses only a single fixed game ID per private chat.
+        allow get: if gameId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if gameId == 'current' && member(threadId) &&
+          newGameInvitation(threadId);
+        allow update: if gameId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(gameFields()) &&
+          request.resource.data.keys().hasAll(gameFields()) &&
+          (
+            (resource.data.state in ['won','draw','cancelled','declined'] &&
+             newGameInvitation(threadId)) ||
+            validGameResponse() ||
+            validGameMove()
+          );
+        allow delete: if false;
+      }
+
+      // Private Quick Quiz, separate from the existing Tic-Tac-Toe
+      // /games/current invitation document. No game or chat schema changes.
+      function quizMembers() {
+        return get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+      }
+      function quizCreateValid() {
+        return request.resource.data.keys().hasOnly([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.keys().hasAll([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == 0 &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+      }
+      function quizNextAnswer(before,after,index,n) {
+        return before.size() == n &&
+          after.size() == n + 1 &&
+          !(index in before) &&
+          after.get(index,-1) is int &&
+          after.get(index,-1) >= 0 &&
+          after.get(index,-1) <= 3 &&
+          after.diff(before).affectedKeys().hasOnly([index]) &&
+          after.diff(before).addedKeys().hasAll([index]);
+      }
+      function quizOwnAnswerChanged() {
+        let old = resource.data.answers;
+        let next = request.resource.data.answers;
+        let before = old.get(request.auth.uid,{});
+        let after = next.get(request.auth.uid,{});
+        return old is map && next is map &&
+          before is map && after is map &&
+          next.size() <= 2 &&
+          next.keys().hasOnly(quizMembers()) &&
+          next.diff(old).affectedKeys().hasOnly([request.auth.uid]) &&
+          next.diff(old).affectedKeys().hasAll([request.auth.uid]) &&
+          after.keys().hasOnly(['0','1','2','3','4']) &&
+          (
+            quizNextAnswer(before,after,'0',0) ||
+            quizNextAnswer(before,after,'1',1) ||
+            quizNextAnswer(before,after,'2',2) ||
+            quizNextAnswer(before,after,'3',3) ||
+            quizNextAnswer(before,after,'4',4)
+          );
+      }
+      function quizAnswerValid() {
+        return request.resource.data.round == resource.data.round &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['answers','updatedAt']) &&
+          quizOwnAnswerChanged();
+      }
+      function quizBothFinished() {
+        return resource.data.answers.get(quizMembers()[0],{}).size() == 5 &&
+          resource.data.answers.get(quizMembers()[1],{}).size() == 5;
+      }
+      function quizRestartValid() {
+        return (
+            quizBothFinished() ||
+            (
+              request.time >= resource.data.updatedAt &&
+              request.time - resource.data.updatedAt >= duration.value(1,'h')
+            )
+          ) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == resource.data.round + 1 &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','round','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['round','updatedAt']);
+      }
+      match /quizzes/{quizId} {
+        allow get: if quizId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if quizId == 'current' && member(threadId) &&
+          quizCreateValid();
+        allow update: if quizId == 'current' && member(threadId) &&
+          (quizAnswerValid() || quizRestartValid());
+        allow delete: if false;
+      }
+
+      // Ephemeral activity status: only chat members can read the other person's
+      // status, and only the signed-in user may update their OWN document.
+      match /typing/{uid} {
+        allow get: if member(threadId);
+        allow list: if false;
+        allow create, update: if member(threadId) &&
+          request.auth.uid == uid &&
+          request.resource.data.keys().hasOnly(['active', 'updatedAt']) &&
+          request.resource.data.keys().hasAll(['active', 'updatedAt']) &&
+          request.resource.data.active is bool &&
+          request.resource.data.updatedAt == request.time;
+        allow delete: if member(threadId) && request.auth.uid == uid;
+      }
+
+      match /messages/{messageId} {
+        allow get, list: if member(threadId);
+        allow create: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
+          validReply(threadId) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          // Use a server-issued send time, not a user-controlled timestamp.
+          request.resource.data.createdAt == request.time;
+        // Only the receiving participant may acknowledge delivery/read.
+        // Never permit changing sender, text or creation time.
+        allow update: if member(threadId) &&
+          request.auth.uid != resource.data.senderId &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
+          ('deliveredAt' in request.resource.data) &&
+          request.resource.data.deliveredAt is timestamp &&
+          (
+            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
+            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
+          ) &&
+          (
+            !('seenAt' in request.resource.data) ||
+            (
+              request.resource.data.seenAt is timestamp &&
+              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
+              (
+                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
+                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
+              )
+            )
+          );
+        // Only the author can edit the message text during the first 15 minutes.
+        // The server controls editedAt, and all other fields stay unchanged,
+        // including author, original timestamp, reply, and delivery/read ticks.
+        allow update: if member(threadId) &&
+          request.auth.uid == resource.data.senderId &&
+          resource.data.createdAt is timestamp &&
+          request.time >= resource.data.createdAt &&
+          request.time - resource.data.createdAt < duration.value(15, 'm') &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          request.resource.data.text != resource.data.text &&
+          request.resource.data.editedAt == request.time;
+        // One emoji reaction per participant, including on messages they received.
+        // The caller may change ONLY their own entry of the reactions map.
+        // A nested FieldPath write preserves simultaneous reactions, message edits,
+        // sender/original timestamp, replies, and the delivery/read receipts.
+        allow update: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
+          request.resource.data.get('reactions', {}) is map &&
+          request.resource.data.get('reactions', {}).size() <= 2 &&
+          request.resource.data.get('reactions', {}).keys().hasOnly(
+            get(/databases/$(database)/documents/threads/$(threadId)).data.members
+          ) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasAny([request.auth.uid]) &&
+          (
+            !(request.auth.uid in request.resource.data.get('reactions', {})) ||
+            (
+              request.resource.data.get('reactions', {})[request.auth.uid] is string &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() > 0 &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() <= 32
+            )
+          );
+        allow delete: if member(threadId) &&
+          resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}
+) &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+        // Clearing a shared canvas starts an entirely new random session.
+        // Older drawings remain inaccessible via the client session listener.
+        allow update: if roomId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(['session','createdAt','updatedAt']) &&
+          request.resource.data.keys().hasAll(['session','createdAt','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['session','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['session','updatedAt']) &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.session is string &&
+          request.resource.data.session.matches('^[A-Za-z0-9]{20}
+      // Its fixed path prevents unbounded game invitation documents.
+      // Only conversation members may inspect or change the match.
+      function gameFields() {
+        return ['xUid','oUid','board','turn','state','winner','createdAt','updatedAt'];
+      }
+      function newGameInvitation(threadId) {
+        let data = request.resource.data;
+        let participants = get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+        return data.keys().hasOnly(gameFields()) &&
+          data.keys().hasAll(gameFields()) &&
+          data.xUid == request.auth.uid &&
+          data.xUid is string && data.oUid is string &&
+          data.xUid != data.oUid &&
+          participants.hasAll([data.xUid,data.oUid]) &&
+          data.board == ['', '', '', '', '', '', '', '', ''] &&
+          data.turn == 'X' &&
+          data.state == 'invited' &&
+          data.winner == '' &&
+          data.createdAt == request.time &&
+          data.updatedAt == request.time;
+      }
+      function gameWinner(b, symbol) {
+        return (b[0]==symbol && b[1]==symbol && b[2]==symbol) ||
+          (b[3]==symbol && b[4]==symbol && b[5]==symbol) ||
+          (b[6]==symbol && b[7]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[3]==symbol && b[6]==symbol) ||
+          (b[1]==symbol && b[4]==symbol && b[7]==symbol) ||
+          (b[2]==symbol && b[5]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[4]==symbol && b[8]==symbol) ||
+          (b[2]==symbol && b[4]==symbol && b[6]==symbol);
+      }
+      function gameChangedCells(before, after) {
+        return (before[0]==after[0] ? 0 : 1) +
+          (before[1]==after[1] ? 0 : 1) +
+          (before[2]==after[2] ? 0 : 1) +
+          (before[3]==after[3] ? 0 : 1) +
+          (before[4]==after[4] ? 0 : 1) +
+          (before[5]==after[5] ? 0 : 1) +
+          (before[6]==after[6] ? 0 : 1) +
+          (before[7]==after[7] ? 0 : 1) +
+          (before[8]==after[8] ? 0 : 1);
+      }
+      function gameAddsOnlyOwnMark(before, after, mark) {
+        return (before[0]==after[0] || (before[0]=='' && after[0]==mark)) &&
+          (before[1]==after[1] || (before[1]=='' && after[1]==mark)) &&
+          (before[2]==after[2] || (before[2]=='' && after[2]==mark)) &&
+          (before[3]==after[3] || (before[3]=='' && after[3]==mark)) &&
+          (before[4]==after[4] || (before[4]=='' && after[4]==mark)) &&
+          (before[5]==after[5] || (before[5]=='' && after[5]==mark)) &&
+          (before[6]==after[6] || (before[6]=='' && after[6]==mark)) &&
+          (before[7]==after[7] || (before[7]=='' && after[7]==mark)) &&
+          (before[8]==after[8] || (before[8]=='' && after[8]==mark));
+      }
+      function validGameResponse() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return before.state in ['invited','playing'] &&
+          after.board == before.board &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.turn == before.turn && after.winner == before.winner &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(['state','updatedAt']) &&
+          (
+            (before.state == 'invited' &&
+              ((request.auth.uid == before.oUid && after.state in ['playing','declined']) ||
+               (request.auth.uid == before.xUid && after.state == 'cancelled'))) ||
+            (before.state == 'playing' &&
+              request.auth.uid in [before.xUid, before.oUid] &&
+              after.state == 'cancelled')
+          );
+      }
+      function validGameMove() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let mark = before.turn;
+        return before.state == 'playing' &&
+          mark in ['X','O'] &&
+          ((mark=='X' && request.auth.uid == before.xUid) ||
+           (mark=='O' && request.auth.uid == before.oUid)) &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(
+            ['board','turn','state','winner','updatedAt']
+          ) &&
+          after.board is list && after.board.size() == 9 &&
+          gameChangedCells(before.board,after.board) == 1 &&
+          gameAddsOnlyOwnMark(before.board,after.board,mark) &&
+          after.turn == (mark=='X' ? 'O' : 'X') &&
+          after.winner == (gameWinner(after.board,mark) ? mark : '') &&
+          after.state == (gameWinner(after.board,mark)
+            ? 'won' : ('' in after.board ? 'playing' : 'draw'));
+      }
+      match /games/{gameId} {
+        // The client uses only a single fixed game ID per private chat.
+        allow get: if gameId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if gameId == 'current' && member(threadId) &&
+          newGameInvitation(threadId);
+        allow update: if gameId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(gameFields()) &&
+          request.resource.data.keys().hasAll(gameFields()) &&
+          (
+            (resource.data.state in ['won','draw','cancelled','declined'] &&
+             newGameInvitation(threadId)) ||
+            validGameResponse() ||
+            validGameMove()
+          );
+        allow delete: if false;
+      }
+
+      // Private Quick Quiz, separate from the existing Tic-Tac-Toe
+      // /games/current invitation document. No game or chat schema changes.
+      function quizMembers() {
+        return get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+      }
+      function quizCreateValid() {
+        return request.resource.data.keys().hasOnly([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.keys().hasAll([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == 0 &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+      }
+      function quizNextAnswer(before,after,index,n) {
+        return before.size() == n &&
+          after.size() == n + 1 &&
+          !(index in before) &&
+          after.get(index,-1) is int &&
+          after.get(index,-1) >= 0 &&
+          after.get(index,-1) <= 3 &&
+          after.diff(before).affectedKeys().hasOnly([index]) &&
+          after.diff(before).addedKeys().hasAll([index]);
+      }
+      function quizOwnAnswerChanged() {
+        let old = resource.data.answers;
+        let next = request.resource.data.answers;
+        let before = old.get(request.auth.uid,{});
+        let after = next.get(request.auth.uid,{});
+        return old is map && next is map &&
+          before is map && after is map &&
+          next.size() <= 2 &&
+          next.keys().hasOnly(quizMembers()) &&
+          next.diff(old).affectedKeys().hasOnly([request.auth.uid]) &&
+          next.diff(old).affectedKeys().hasAll([request.auth.uid]) &&
+          after.keys().hasOnly(['0','1','2','3','4']) &&
+          (
+            quizNextAnswer(before,after,'0',0) ||
+            quizNextAnswer(before,after,'1',1) ||
+            quizNextAnswer(before,after,'2',2) ||
+            quizNextAnswer(before,after,'3',3) ||
+            quizNextAnswer(before,after,'4',4)
+          );
+      }
+      function quizAnswerValid() {
+        return request.resource.data.round == resource.data.round &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['answers','updatedAt']) &&
+          quizOwnAnswerChanged();
+      }
+      function quizBothFinished() {
+        return resource.data.answers.get(quizMembers()[0],{}).size() == 5 &&
+          resource.data.answers.get(quizMembers()[1],{}).size() == 5;
+      }
+      function quizRestartValid() {
+        return (
+            quizBothFinished() ||
+            (
+              request.time >= resource.data.updatedAt &&
+              request.time - resource.data.updatedAt >= duration.value(1,'h')
+            )
+          ) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == resource.data.round + 1 &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','round','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['round','updatedAt']);
+      }
+      match /quizzes/{quizId} {
+        allow get: if quizId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if quizId == 'current' && member(threadId) &&
+          quizCreateValid();
+        allow update: if quizId == 'current' && member(threadId) &&
+          (quizAnswerValid() || quizRestartValid());
+        allow delete: if false;
+      }
+
+      // Ephemeral activity status: only chat members can read the other person's
+      // status, and only the signed-in user may update their OWN document.
+      match /typing/{uid} {
+        allow get: if member(threadId);
+        allow list: if false;
+        allow create, update: if member(threadId) &&
+          request.auth.uid == uid &&
+          request.resource.data.keys().hasOnly(['active', 'updatedAt']) &&
+          request.resource.data.keys().hasAll(['active', 'updatedAt']) &&
+          request.resource.data.active is bool &&
+          request.resource.data.updatedAt == request.time;
+        allow delete: if member(threadId) && request.auth.uid == uid;
+      }
+
+      match /messages/{messageId} {
+        allow get, list: if member(threadId);
+        allow create: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
+          validReply(threadId) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          // Use a server-issued send time, not a user-controlled timestamp.
+          request.resource.data.createdAt == request.time;
+        // Only the receiving participant may acknowledge delivery/read.
+        // Never permit changing sender, text or creation time.
+        allow update: if member(threadId) &&
+          request.auth.uid != resource.data.senderId &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
+          ('deliveredAt' in request.resource.data) &&
+          request.resource.data.deliveredAt is timestamp &&
+          (
+            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
+            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
+          ) &&
+          (
+            !('seenAt' in request.resource.data) ||
+            (
+              request.resource.data.seenAt is timestamp &&
+              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
+              (
+                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
+                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
+              )
+            )
+          );
+        // Only the author can edit the message text during the first 15 minutes.
+        // The server controls editedAt, and all other fields stay unchanged,
+        // including author, original timestamp, reply, and delivery/read ticks.
+        allow update: if member(threadId) &&
+          request.auth.uid == resource.data.senderId &&
+          resource.data.createdAt is timestamp &&
+          request.time >= resource.data.createdAt &&
+          request.time - resource.data.createdAt < duration.value(15, 'm') &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          request.resource.data.text != resource.data.text &&
+          request.resource.data.editedAt == request.time;
+        // One emoji reaction per participant, including on messages they received.
+        // The caller may change ONLY their own entry of the reactions map.
+        // A nested FieldPath write preserves simultaneous reactions, message edits,
+        // sender/original timestamp, replies, and the delivery/read receipts.
+        allow update: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
+          request.resource.data.get('reactions', {}) is map &&
+          request.resource.data.get('reactions', {}).size() <= 2 &&
+          request.resource.data.get('reactions', {}).keys().hasOnly(
+            get(/databases/$(database)/documents/threads/$(threadId)).data.members
+          ) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasAny([request.auth.uid]) &&
+          (
+            !(request.auth.uid in request.resource.data.get('reactions', {})) ||
+            (
+              request.resource.data.get('reactions', {})[request.auth.uid] is string &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() > 0 &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() <= 32
+            )
+          );
+        allow delete: if member(threadId) &&
+          resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}
+) &&
+          request.resource.data.session != resource.data.session &&
+          request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+
+        match /sessions/{sessionId}/strokes/{strokeId} {
+          function activeDoodleSession() {
+            return exists(/databases/$(database)/documents/threads/$(threadId)/doodles/current) &&
+              get(/databases/$(database)/documents/threads/$(threadId)/doodles/current)
+                .data.session == sessionId;
+          }
+          allow get, list: if roomId == 'current' && member(threadId) &&
+            activeDoodleSession();
+          allow create: if roomId == 'current' && member(threadId) &&
+            activeDoodleSession() &&
+            request.resource.data.keys().hasOnly(['uid','color','size','points','createdAt']) &&
+            request.resource.data.keys().hasAll(['uid','color','size','points','createdAt']) &&
+            request.resource.data.uid == request.auth.uid &&
+            request.resource.data.color in [
+              '#263548','#ff6b6b','#29aa85','#6e62e5','#f7ad30','#ffffff'
+            ] &&
+            request.resource.data.size in [3,6,12,24] &&
+            request.resource.data.points is string &&
+            request.resource.data.points.size() <= 256 &&
+            request.resource.data.points.matches(
+              '^[0-9]{4},[0-9]{4}(;[0-9]{4},[0-9]{4}){0,24}
+      // Its fixed path prevents unbounded game invitation documents.
+      // Only conversation members may inspect or change the match.
+      function gameFields() {
+        return ['xUid','oUid','board','turn','state','winner','createdAt','updatedAt'];
+      }
+      function newGameInvitation(threadId) {
+        let data = request.resource.data;
+        let participants = get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+        return data.keys().hasOnly(gameFields()) &&
+          data.keys().hasAll(gameFields()) &&
+          data.xUid == request.auth.uid &&
+          data.xUid is string && data.oUid is string &&
+          data.xUid != data.oUid &&
+          participants.hasAll([data.xUid,data.oUid]) &&
+          data.board == ['', '', '', '', '', '', '', '', ''] &&
+          data.turn == 'X' &&
+          data.state == 'invited' &&
+          data.winner == '' &&
+          data.createdAt == request.time &&
+          data.updatedAt == request.time;
+      }
+      function gameWinner(b, symbol) {
+        return (b[0]==symbol && b[1]==symbol && b[2]==symbol) ||
+          (b[3]==symbol && b[4]==symbol && b[5]==symbol) ||
+          (b[6]==symbol && b[7]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[3]==symbol && b[6]==symbol) ||
+          (b[1]==symbol && b[4]==symbol && b[7]==symbol) ||
+          (b[2]==symbol && b[5]==symbol && b[8]==symbol) ||
+          (b[0]==symbol && b[4]==symbol && b[8]==symbol) ||
+          (b[2]==symbol && b[4]==symbol && b[6]==symbol);
+      }
+      function gameChangedCells(before, after) {
+        return (before[0]==after[0] ? 0 : 1) +
+          (before[1]==after[1] ? 0 : 1) +
+          (before[2]==after[2] ? 0 : 1) +
+          (before[3]==after[3] ? 0 : 1) +
+          (before[4]==after[4] ? 0 : 1) +
+          (before[5]==after[5] ? 0 : 1) +
+          (before[6]==after[6] ? 0 : 1) +
+          (before[7]==after[7] ? 0 : 1) +
+          (before[8]==after[8] ? 0 : 1);
+      }
+      function gameAddsOnlyOwnMark(before, after, mark) {
+        return (before[0]==after[0] || (before[0]=='' && after[0]==mark)) &&
+          (before[1]==after[1] || (before[1]=='' && after[1]==mark)) &&
+          (before[2]==after[2] || (before[2]=='' && after[2]==mark)) &&
+          (before[3]==after[3] || (before[3]=='' && after[3]==mark)) &&
+          (before[4]==after[4] || (before[4]=='' && after[4]==mark)) &&
+          (before[5]==after[5] || (before[5]=='' && after[5]==mark)) &&
+          (before[6]==after[6] || (before[6]=='' && after[6]==mark)) &&
+          (before[7]==after[7] || (before[7]=='' && after[7]==mark)) &&
+          (before[8]==after[8] || (before[8]=='' && after[8]==mark));
+      }
+      function validGameResponse() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return before.state in ['invited','playing'] &&
+          after.board == before.board &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.turn == before.turn && after.winner == before.winner &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(['state','updatedAt']) &&
+          (
+            (before.state == 'invited' &&
+              ((request.auth.uid == before.oUid && after.state in ['playing','declined']) ||
+               (request.auth.uid == before.xUid && after.state == 'cancelled'))) ||
+            (before.state == 'playing' &&
+              request.auth.uid in [before.xUid, before.oUid] &&
+              after.state == 'cancelled')
+          );
+      }
+      function validGameMove() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let mark = before.turn;
+        return before.state == 'playing' &&
+          mark in ['X','O'] &&
+          ((mark=='X' && request.auth.uid == before.xUid) ||
+           (mark=='O' && request.auth.uid == before.oUid)) &&
+          after.xUid == before.xUid && after.oUid == before.oUid &&
+          after.createdAt == before.createdAt &&
+          after.updatedAt == request.time &&
+          after.diff(before).affectedKeys().hasOnly(
+            ['board','turn','state','winner','updatedAt']
+          ) &&
+          after.board is list && after.board.size() == 9 &&
+          gameChangedCells(before.board,after.board) == 1 &&
+          gameAddsOnlyOwnMark(before.board,after.board,mark) &&
+          after.turn == (mark=='X' ? 'O' : 'X') &&
+          after.winner == (gameWinner(after.board,mark) ? mark : '') &&
+          after.state == (gameWinner(after.board,mark)
+            ? 'won' : ('' in after.board ? 'playing' : 'draw'));
+      }
+      match /games/{gameId} {
+        // The client uses only a single fixed game ID per private chat.
+        allow get: if gameId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if gameId == 'current' && member(threadId) &&
+          newGameInvitation(threadId);
+        allow update: if gameId == 'current' && member(threadId) &&
+          request.resource.data.keys().hasOnly(gameFields()) &&
+          request.resource.data.keys().hasAll(gameFields()) &&
+          (
+            (resource.data.state in ['won','draw','cancelled','declined'] &&
+             newGameInvitation(threadId)) ||
+            validGameResponse() ||
+            validGameMove()
+          );
+        allow delete: if false;
+      }
+
+      // Private Quick Quiz, separate from the existing Tic-Tac-Toe
+      // /games/current invitation document. No game or chat schema changes.
+      function quizMembers() {
+        return get(/databases/$(database)/documents/threads/$(threadId)).data.members;
+      }
+      function quizCreateValid() {
+        return request.resource.data.keys().hasOnly([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.keys().hasAll([
+            'answers','round','createdAt','updatedAt'
+          ]) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == 0 &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+      }
+      function quizNextAnswer(before,after,index,n) {
+        return before.size() == n &&
+          after.size() == n + 1 &&
+          !(index in before) &&
+          after.get(index,-1) is int &&
+          after.get(index,-1) >= 0 &&
+          after.get(index,-1) <= 3 &&
+          after.diff(before).affectedKeys().hasOnly([index]) &&
+          after.diff(before).addedKeys().hasAll([index]);
+      }
+      function quizOwnAnswerChanged() {
+        let old = resource.data.answers;
+        let next = request.resource.data.answers;
+        let before = old.get(request.auth.uid,{});
+        let after = next.get(request.auth.uid,{});
+        return old is map && next is map &&
+          before is map && after is map &&
+          next.size() <= 2 &&
+          next.keys().hasOnly(quizMembers()) &&
+          next.diff(old).affectedKeys().hasOnly([request.auth.uid]) &&
+          next.diff(old).affectedKeys().hasAll([request.auth.uid]) &&
+          after.keys().hasOnly(['0','1','2','3','4']) &&
+          (
+            quizNextAnswer(before,after,'0',0) ||
+            quizNextAnswer(before,after,'1',1) ||
+            quizNextAnswer(before,after,'2',2) ||
+            quizNextAnswer(before,after,'3',3) ||
+            quizNextAnswer(before,after,'4',4)
+          );
+      }
+      function quizAnswerValid() {
+        return request.resource.data.round == resource.data.round &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['answers','updatedAt']) &&
+          quizOwnAnswerChanged();
+      }
+      function quizBothFinished() {
+        return resource.data.answers.get(quizMembers()[0],{}).size() == 5 &&
+          resource.data.answers.get(quizMembers()[1],{}).size() == 5;
+      }
+      function quizRestartValid() {
+        return (
+            quizBothFinished() ||
+            (
+              request.time >= resource.data.updatedAt &&
+              request.time - resource.data.updatedAt >= duration.value(1,'h')
+            )
+          ) &&
+          request.resource.data.answers == {} &&
+          request.resource.data.round == resource.data.round + 1 &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['answers','round','updatedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasAll(['round','updatedAt']);
+      }
+      match /quizzes/{quizId} {
+        allow get: if quizId == 'current' && member(threadId);
+        allow list: if false;
+        allow create: if quizId == 'current' && member(threadId) &&
+          quizCreateValid();
+        allow update: if quizId == 'current' && member(threadId) &&
+          (quizAnswerValid() || quizRestartValid());
+        allow delete: if false;
+      }
+
+      // Ephemeral activity status: only chat members can read the other person's
+      // status, and only the signed-in user may update their OWN document.
+      match /typing/{uid} {
+        allow get: if member(threadId);
+        allow list: if false;
+        allow create, update: if member(threadId) &&
+          request.auth.uid == uid &&
+          request.resource.data.keys().hasOnly(['active', 'updatedAt']) &&
+          request.resource.data.keys().hasAll(['active', 'updatedAt']) &&
+          request.resource.data.active is bool &&
+          request.resource.data.updatedAt == request.time;
+        allow delete: if member(threadId) && request.auth.uid == uid;
+      }
+
+      match /messages/{messageId} {
+        allow get, list: if member(threadId);
+        allow create: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo']) &&
+          validReply(threadId) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          // Use a server-issued send time, not a user-controlled timestamp.
+          request.resource.data.createdAt == request.time;
+        // Only the receiving participant may acknowledge delivery/read.
+        // Never permit changing sender, text or creation time.
+        allow update: if member(threadId) &&
+          request.auth.uid != resource.data.senderId &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'seenAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAt', 'seenAt']) &&
+          ('deliveredAt' in request.resource.data) &&
+          request.resource.data.deliveredAt is timestamp &&
+          (
+            (!('deliveredAt' in resource.data) && request.resource.data.deliveredAt == request.time) ||
+            ('deliveredAt' in resource.data && request.resource.data.deliveredAt == resource.data.deliveredAt)
+          ) &&
+          (
+            !('seenAt' in request.resource.data) ||
+            (
+              request.resource.data.seenAt is timestamp &&
+              request.resource.data.seenAt >= request.resource.data.deliveredAt &&
+              (
+                (!('seenAt' in resource.data) && request.resource.data.seenAt == request.time) ||
+                ('seenAt' in resource.data && request.resource.data.seenAt == resource.data.seenAt)
+              )
+            )
+          );
+        // Only the author can edit the message text during the first 15 minutes.
+        // The server controls editedAt, and all other fields stay unchanged,
+        // including author, original timestamp, reply, and delivery/read ticks.
+        allow update: if member(threadId) &&
+          request.auth.uid == resource.data.senderId &&
+          resource.data.createdAt is timestamp &&
+          request.time >= resource.data.createdAt &&
+          request.time - resource.data.createdAt < duration.value(15, 'm') &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['text', 'editedAt']) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 1000 &&
+          request.resource.data.text != resource.data.text &&
+          request.resource.data.editedAt == request.time;
+        // One emoji reaction per participant, including on messages they received.
+        // The caller may change ONLY their own entry of the reactions map.
+        // A nested FieldPath write preserves simultaneous reactions, message edits,
+        // sender/original timestamp, replies, and the delivery/read receipts.
+        allow update: if member(threadId) &&
+          request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt', 'replyTo', 'editedAt', 'deliveredAt', 'seenAt', 'reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions']) &&
+          request.resource.data.get('reactions', {}) is map &&
+          request.resource.data.get('reactions', {}).size() <= 2 &&
+          request.resource.data.get('reactions', {}).keys().hasOnly(
+            get(/databases/$(database)/documents/threads/$(threadId)).data.members
+          ) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.get('reactions', {}).diff(
+            resource.data.get('reactions', {})
+          ).affectedKeys().hasAny([request.auth.uid]) &&
+          (
+            !(request.auth.uid in request.resource.data.get('reactions', {})) ||
+            (
+              request.resource.data.get('reactions', {})[request.auth.uid] is string &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() > 0 &&
+              request.resource.data.get('reactions', {})[request.auth.uid].size() <= 32
+            )
+          );
+        allow delete: if member(threadId) &&
+          resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}
+
+            ) &&
+            request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+      }
+
       // One private Tic-Tac-Toe match per conversation (games/current).
       // Its fixed path prevents unbounded game invitation documents.
       // Only conversation members may inspect or change the match.
