@@ -768,7 +768,11 @@ async function submitMessageEdit(){
       status('Message edited');
     }
   }catch(error){
-    status('Could not edit message: '+error.message);
+    if(error?.code==='permission-denied'){
+      status('Edit blocked by Firebase rules. The new Edit Message rules must be published.');
+    }else{
+      status('Could not edit message: '+error.message);
+    }
   }finally{
     $('sendBtn').disabled=false;
   }
