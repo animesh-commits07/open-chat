@@ -29,6 +29,8 @@ export function createAnimatedMessagesController(){
   const $=id=>document.getElementById(id);
   const toggle=$('effectToggleBtn'),picker=$('effectPicker');
   const options=$('effectOptions'),hint=$('effectHint');
+  const sendError=$('effectSendError'),sendErrorText=$('effectSendErrorText');
+  const errorDismiss=$('effectErrorDismiss');
   let selected='',threadId=null,known=new Set(),initialized=false;
   let playingUntil=new Map(),editing=false;
 
@@ -47,6 +49,17 @@ export function createAnimatedMessagesController(){
       button.classList.toggle('selected',enabled);
     }
   }
+  function clearSendError(){
+    sendErrorText.textContent='';
+    sendError.classList.add('hidden');
+  }
+  function showSendError(problem){
+    sendErrorText.textContent=problem?.code==='permission-denied'
+      ?'Animated message was NOT sent. Publish the latest Firestore message-effect rules and retry.'
+      :'Animated message was NOT sent. Check the connection and try again.';
+    sendError.classList.remove('hidden');
+  }
+  errorDismiss.onclick=clearSendError;
   function closePicker(){
     picker.classList.add('hidden');
     toggle.setAttribute('aria-expanded','false');
@@ -86,13 +99,13 @@ export function createAnimatedMessagesController(){
     threadId=id;
     selected='';editing=false;toggle.disabled=false;
     known=new Set();initialized=false;playingUntil.clear();
-    updateSelection();closePicker();
+    updateSelection();closePicker();clearSendError();
   }
   function endChat(){
     threadId=null;
     selected='';editing=false;toggle.disabled=false;
     known=new Set();initialized=false;playingUntil.clear();
-    updateSelection();closePicker();
+    updateSelection();closePicker();clearSendError();
   }
   function setEditing(value){
     editing=!!value;
@@ -189,5 +202,6 @@ export function createAnimatedMessagesController(){
     if(animate || (id && (playingUntil.get(id)||0)>Date.now()))play(node,effect);
   }
   return {beginChat,endChat,setEditing,currentEffect,clearSentEffect,
-    observeSnapshot,decorateMessage,selectEffect,closePicker};
+    observeSnapshot,decorateMessage,selectEffect,closePicker,
+    showSendError,clearSendError};
 }
