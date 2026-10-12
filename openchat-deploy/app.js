@@ -917,13 +917,13 @@ function showActions(item,message,node,threadId){
   };
   const cancel=el('button',null,'Cancel');
   cancel.type='button';cancel.onclick=closeActions;
-  menu.append(reply);
+  menu.append(reactionChoices(item,message,threadId),reply);
   if(edit)menu.append(edit);
   menu.append(copy,cancel);
   document.body.append(menu);actionMenu=menu;
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
-    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?240:190))+'px';
+    menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?322:270))+'px';
     menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
   }
   reply.focus({preventScroll:true});
@@ -1033,6 +1033,8 @@ function openChat(id,u){
         const quote=createQuote(message.replyTo);
         if(quote)node.append(quote);
         node.append(el('div','msg-body',message.text));
+        const reactionChips=renderReactionChips(item,message,id);
+        if(reactionChips)node.append(reactionChips);
         enableReplyGesture(node,item,message,id);
         const meta=el('div','msg-meta');
         const when=message.createdAt?.toDate?.();
@@ -1044,6 +1046,12 @@ function openChat(id,u){
         replyButton.setAttribute('aria-label','Reply to this message');
         replyButton.onclick=()=>startReply(item,message,id);
         meta.append(replyButton);
+        const reactButton=el('button','react-trigger','☺');
+        reactButton.type='button';
+        reactButton.title='React to this message';
+        reactButton.setAttribute('aria-label','React to this message');
+        reactButton.onclick=()=>showReactionPicker(item,message,node,id);
+        meta.append(reactButton);
         if(own){
           const state=outgoingReceiptState(message,!!item.metadata?.hasPendingWrites);
           const ticks=el('span','receipt-ticks receipt-'+state,state==='sending'?'◷':state==='sent'?'✓':'✓✓');
