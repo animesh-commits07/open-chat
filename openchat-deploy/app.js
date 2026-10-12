@@ -1105,7 +1105,7 @@ function showReactionPicker(item,message,node,threadId){
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
     menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-124)+'px';
-    menu.style.left=Math.min(Math.max(8,rect.left),window.innerWidth-320)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.left),window.innerWidth-338)+'px';
   }
   menu.querySelector('.reaction-choice')?.focus({preventScroll:true});
 }
@@ -1136,7 +1136,7 @@ function showActions(item,message,node,threadId){
   if(window.innerWidth>700){
     const rect=node.getBoundingClientRect();
     menu.style.top=Math.min(Math.max(8,rect.top),window.innerHeight-(editAllowed?322:270))+'px';
-    menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-206)+'px';
+    menu.style.left=Math.min(Math.max(8,rect.right+8),window.innerWidth-338)+'px';
   }
   reply.focus({preventScroll:true});
 }
