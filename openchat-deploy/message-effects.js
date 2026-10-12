@@ -156,14 +156,28 @@ export function createMessageEffectsController({db,getContext,onStatus}){
     button.title='Animate this message for both friends';
     button.setAttribute('aria-label','Animate message for both friends');
     const remaining=Math.max(0,timestamp+1000-Date.now());
-    if(remaining>0)button.classList.add('hidden');
-    button.onclick=()=>showChoices(node,messageId);
-    meta.append(button);
+    const options=document.createElement('button');
+    options.type='button';
+    options.className='effect-options';
+    options.textContent='▾';
+    options.title='Choose another animation';
+    options.setAttribute('aria-label','Choose Confetti, Fireworks, Sparkles or Hearts');
+    // One tap on Animate always launches the default shared Confetti effect.
+    // The small adjacent arrow is for choosing another effect.
+    button.onclick=()=>{dismiss();void trigger(messageId,'confetti')};
+    options.onclick=()=>showChoices(node,messageId);
+    if(remaining>0){
+      button.classList.add('hidden');
+      options.classList.add('hidden');
+    }
+    meta.append(button,options);
     if(remaining>0){
       const timer=setTimeout(()=>{
         revealTimers.delete(timer);
-        if(context===original&&current()&&node.isConnected)
+        if(context===original&&current()&&node.isConnected){
           button.classList.remove('hidden');
+          options.classList.remove('hidden');
+        }
       },remaining+30);
       revealTimers.add(timer);
     }
