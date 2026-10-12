@@ -2,8 +2,9 @@ import {
   collection,doc,onSnapshot,query,orderBy,limit,runTransaction,setDoc,serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
-// One shared white canvas per private thread. Each session has an immutable,
-// timestamped stream of small stroke segments. Nothing here touches messages,
+// One shared transparent drawing layer OVER a private conversation. Each
+// session has an immutable timestamped stroke stream; chat stays visible.
+// Nothing here touches messages,
 // existing mini games, typing, presence or push subscriptions.
 const PALETTE=['#263548','#ff6b6b','#29aa85','#6e62e5','#f7ad30'];
 const ERASER='#ffffff';
@@ -40,7 +41,7 @@ export function createLiveDoodleController({db,getContext}){
   let scope=null,roomRef=null,sessionId='',stopRoom=null,stopStrokes=null;
   let serverRoom=false,serverStrokes=false,initializing=false,clearing=false;
   let strokes=[],strokeDocCount=0,error='',open=false;
-  let active=null,flushTimer=null,chosenColor=PALETTE[0],penSize=6,eraser=false;
+  let active=null,flushTimer=null,chosenColor=PALETTE[1],penSize=6,eraser=false;
   let pending=new Map(),queue=[],writing=0,listenerRevision=0,resizeObserver=null;
   const colorButtons=[],sizeButtons=[];
 
@@ -84,6 +85,8 @@ export function createLiveDoodleController({db,getContext}){
     if(!ctx||!points.length)return;
     ctx.save();
     ctx.lineCap='round';ctx.lineJoin='round';
+    // Eraser removes only doodle ink, never the underlying chat messages.
+    ctx.globalCompositeOperation=color===ERASER?'destination-out':'source-over';
     ctx.lineWidth=size;ctx.strokeStyle=color;ctx.fillStyle=color;
     if(points.length===1){
       const [x,y]=points[0];
@@ -112,9 +115,8 @@ export function createLiveDoodleController({db,getContext}){
   }
   function redrawBase(){
     if(!baseCtx||!canvas.width)return;
+    // Keep the original conversation visible under the transparent ink.
     baseCtx.clearRect(0,0,1000,1000);
-    baseCtx.fillStyle='#ffffff';
-    baseCtx.fillRect(0,0,1000,1000);
     for(const stroke of strokes){
       const data=stroke.data();
       drawPoints(baseCtx,decodeDoodlePoints(data.points),data.color,data.size);
@@ -123,6 +125,9 @@ export function createLiveDoodleController({db,getContext}){
   function redrawOverlay(){
     if(!overlayCtx||!overlay.width)return;
     overlayCtx.clearRect(0,0,1000,1000);
+    // Compose confirmed + unconfirmed marks onto one visible transparent layer.
+    // This also lets an in-progress eraser immediately remove existing marks.
+    if(canvas.width&&canvas.height)overlayCtx.drawImage(canvas,0,0,1000,1000);
     for(const item of pending.values()){
       if(item.session===sessionId)
         drawPoints(overlayCtx,item.points,item.color,item.size);
@@ -360,6 +365,7 @@ export function createLiveDoodleController({db,getContext}){
     redrawBase();redrawOverlay();
     panel.classList.add('hidden');
     launch.setAttribute('aria-expanded','false');
+    launch.setAttribute('aria-pressed','false');
     renderStatus();
   }
   function openDoodle(){
@@ -370,6 +376,7 @@ export function createLiveDoodleController({db,getContext}){
     roomRef=doc(db,'threads',scope.threadId,'doodles','current');
     panel.classList.remove('hidden');
     launch.setAttribute('aria-expanded','true');
+    launch.setAttribute('aria-pressed','true');
     gameClose.click();
     renderStatus();
     resize();
