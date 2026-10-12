@@ -184,6 +184,9 @@ export function createLiveDoodleController({db,getContext}){
   function flushActive(final=false){
     if(!active||!active.points.length)return;
     if(!final&&active.points.length<2)return;
+    // A final pointerup immediately after a timer flush should not create
+    // an extra one-point duplicate document for the previous anchor.
+    if(final&&active.points.length===1&&active.segmentsSent>0)return;
     const points=active.points.slice();
     if(points.length>MAX_POINTS){
       // Every segment is bounded even if one pointer event was delayed.
@@ -195,6 +198,7 @@ export function createLiveDoodleController({db,getContext}){
     }
     active.points=final?[]:[points[points.length-1]];
     enqueue(points,active.color,active.size);
+    active.segmentsSent++;
     redrawOverlay();
   }
   function enqueue(points,color,size){
@@ -240,7 +244,7 @@ export function createLiveDoodleController({db,getContext}){
     overlay.setPointerCapture?.(event.pointerId);
     active={pointerId:event.pointerId,
       color:eraser?ERASER:chosenColor,
-      size:eraser?24:penSize,points:[point]};
+      size:eraser?24:penSize,points:[point],segmentsSent:0};
     redrawOverlay();
     if(flushTimer!==null)clearInterval(flushTimer);
     flushTimer=setInterval(()=>flushActive(false),130);
@@ -351,6 +355,9 @@ export function createLiveDoodleController({db,getContext}){
     scope=null;roomRef=null;sessionId='';serverRoom=false;serverStrokes=false;
     initializing=false;clearing=false;strokes=[];strokeDocCount=0;
     pending.clear();active=null;error='';open=false;
+    // Never briefly display a previous friend's private drawing after a
+    // conversation switch; canvas pixels outlive the DOM panel otherwise.
+    redrawBase();redrawOverlay();
     panel.classList.add('hidden');
     launch.setAttribute('aria-expanded','false');
     renderStatus();
