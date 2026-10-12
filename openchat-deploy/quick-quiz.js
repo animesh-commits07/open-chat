@@ -1,4 +1,4 @@
-import {doc,FieldPath,onSnapshot,runTransaction,serverTimestamp}
+import {doc,FieldPath,onSnapshot,runTransaction,updateDoc,serverTimestamp}
   from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 // Private two-player quiz. Kept separate from existing Tic-Tac-Toe invitations,
@@ -27,6 +27,7 @@ export function createQuickQuizController({db,getContext}){
   const gameClose=$('gameCloseBtn');
   let scope=null,ref=null,unsubscribe=null,quiz=null,confirmed=false;
   let busy=false,error='',opened=false;
+  let pendingAnswer=null;
   const el=(tag,cls,text)=>{
     const n=document.createElement(tag);
     if(cls)n.className=cls;
@@ -49,6 +50,7 @@ export function createQuickQuizController({db,getContext}){
   function close(){
     if(unsubscribe){unsubscribe();unsubscribe=null}
     scope=null;ref=null;quiz=null;confirmed=false;busy=false;error='';opened=false;
+    pendingAnswer=null;
     panel.classList.add('hidden');body.replaceChildren();
     launcher.setAttribute('aria-expanded','false');
   }
@@ -70,8 +72,14 @@ export function createQuickQuizController({db,getContext}){
     }
     const mine=quiz.answers?.[scope.uid]||{};
     const theirs=quiz.answers?.[scope.friendUid]||{};
-    const index=Object.keys(mine).length;
+    // Advance visually immediately after tapping, while the server validates
+    // and saves this answer. A failed write rolls the preview back.
+    const visibleMine=pendingAnswer &&
+      !Object.prototype.hasOwnProperty.call(mine,String(pendingAnswer.question))
+      ?{...mine,[String(pendingAnswer.question)]:pendingAnswer.answer}:mine;
+    const index=Object.keys(visibleMine).length;
     body.append(el('p','quiz-progress','You: '+index+'/5 · Friend: '+Object.keys(theirs).length+'/5'));
+    if(pendingAnswer)body.append(el('p','quiz-hint','Saving your answer…'));
     if(index>=QUICK_QUIZ_QUESTIONS.length){
       if(!isFinished(quiz)){
         body.append(el('p','quiz-hint','You finished! Waiting for your friend’s answers. ⏳'));
@@ -88,13 +96,13 @@ export function createQuickQuizController({db,getContext}){
       const choices=el('div','quiz-choices');
       for(let i=0;i<q.options.length;i++){
         const button=el('button','quiz-choice',q.options[i]);
-        button.type='button';button.disabled=busy;
+        button.type='button';button.disabled=busy || !!pendingAnswer;
         button.onclick=()=>{void submitAnswer(index,i)};
         choices.append(button);
       }
       body.append(choices);
     }
-    if(canRestart(quiz)){
+    if(canRestart(quiz) && !pendingAnswer){
       const replay=el('button','quiz-primary',isFinished(quiz)?'Play quiz again':'Restart inactive quiz');
       replay.type='button';replay.disabled=busy;replay.onclick=()=>{void startQuiz()};
       body.append(replay);
@@ -130,19 +138,38 @@ export function createQuickQuizController({db,getContext}){
       else tx.set(reference,{...next,createdAt:serverTimestamp()});
     });
   }
-  function submitAnswer(question,answer){
+  async function submitAnswer(question,answer){
     if(!Number.isInteger(question)||question<0||question>=5 ||
-       !Number.isInteger(answer)||answer<0||answer>3)return;
-    return runAction(async(tx,snap,original,reference)=>{
-      if(!snap.exists())throw Error('Start a quiz first.');
-      const mine=snap.data().answers?.[original.uid]||{};
-      if(Object.keys(mine).length!==question ||
-         Object.prototype.hasOwnProperty.call(mine,String(question))){
-        throw Error('This question was already answered.');
+       !Number.isInteger(answer)||answer<0||answer>3 ||
+       busy || pendingAnswer || !current() || !confirmed || !ref || !quiz)return;
+    const currentAnswers=quiz.answers?.[scope.uid]||{};
+    if(Object.keys(currentAnswers).length!==question ||
+       Object.prototype.hasOwnProperty.call(currentAnswers,String(question)))return;
+    // Quiz security rules enforce one new answer at a time, only for the
+    // authenticated participant. A direct update avoids the transaction's
+    // preliminary server read, reducing latency while preserving validation.
+    const original=scope,reference=ref;
+    pendingAnswer={question,answer,round:quiz.round};
+    busy=true;error='';render();
+    try{
+      await updateDoc(reference,
+        new FieldPath('answers',original.uid,String(question)),answer,
+        'updatedAt',serverTimestamp());
+      if(scope===original && current()){
+        error='';
+        // Server-verified onSnapshot clears the preview. Keep it visible if
+        // that snapshot arrives after the write promise resolves.
       }
-      tx.update(reference,new FieldPath('answers',original.uid,String(question)),
-        answer,'updatedAt',serverTimestamp());
-    });
+    }catch(e){
+      if(scope===original && current()){
+        pendingAnswer=null;
+        error=e?.code==='permission-denied'
+          ?'Quiz not saved. Publish the latest private Firestore game rules.'
+          :'Could not save quiz: '+(e?.message||'Connection failed');
+      }
+    }finally{
+      if(scope===original){busy=false;render()}
+    }
   }
   function open(){
     const ctx=getContext();
@@ -162,6 +189,11 @@ export function createQuickQuizController({db,getContext}){
         if(scope!==original||!current())return;
         quiz=snapshot.exists()?snapshot.data():null;
         confirmed=!snapshot.metadata.fromCache;
+        if(pendingAnswer && confirmed && !snapshot.metadata.hasPendingWrites &&
+           quiz?.round===pendingAnswer.round &&
+           quiz?.answers?.[scope.uid]?.[String(pendingAnswer.question)]===pendingAnswer.answer){
+          pendingAnswer=null;
+        }
         render();
       },
       e=>{
