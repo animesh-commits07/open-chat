@@ -299,8 +299,9 @@
   .mini-quiz-choice{font-size:12px;padding:9px}
 }
 @media(max-width:420px){
-  .mini-games-launch{font-size:0;min-width:39px}
-  .mini-games-launch::first-letter{font-size:21px}
+  .mini-games-launch{min-width:39px;min-height:39px;display:grid;place-items:center;padding:4px 6px}
+  .mini-games-launch-text{display:none}
+  .mini-games-launch-icon{font-size:21px;line-height:1}
   .typing-check-toggle{font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){.mini-ttt-cell{transition:none}}
