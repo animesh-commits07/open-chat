@@ -149,6 +149,10 @@ export function createAnimatedMessagesController(){
       particle.textContent=glyphs[i%glyphs.length];
       particle.style.setProperty('--dx',x+'px');
       particle.style.setProperty('--dy',y+'px');
+      particle.style.setProperty('--dx-early',Math.round(x*.24)+'px');
+      particle.style.setProperty('--dy-early',Math.round(y*.24)+'px');
+      particle.style.setProperty('--dx-middle',Math.round(x*.83)+'px');
+      particle.style.setProperty('--dy-middle',Math.round(y*.83)+'px');
       particle.style.setProperty('--spin',((i%2===0?1:-1)*(i*31+26))+'deg');
       particle.style.setProperty('--delay',(i%4*65)+'ms');
       layer.append(particle);
