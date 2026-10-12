@@ -378,6 +378,39 @@ service cloud.firestore {
         allow delete: if member(threadId) && request.auth.uid == uid;
       }
 
+      // One independently replayable animation signal per private message.
+      // This does not mutate the message document, edits, reactions or receipts.
+      // Both thread members may play an effect, and both can observe it.
+      match /messageEffects/{messageId} {
+        function animatedMessageExists() {
+          return exists(/databases/$(database)/documents/threads/$(threadId)/messages/$(messageId));
+        }
+        function validAnimationSignal() {
+          return request.resource.data.keys().hasOnly(
+              ['effect','uid','playId','triggeredAt']
+            ) &&
+            request.resource.data.keys().hasAll(
+              ['effect','uid','playId','triggeredAt']
+            ) &&
+            request.resource.data.uid == request.auth.uid &&
+            request.resource.data.effect in
+              ['confetti','fireworks','sparkles','hearts'] &&
+            request.resource.data.playId is string &&
+            request.resource.data.playId.matches('^[A-Za-z0-9]{20}$') &&
+            request.resource.data.triggeredAt == request.time &&
+            animatedMessageExists() &&
+            request.time >=
+              get(/databases/$(database)/documents/threads/$(threadId)/messages/$(messageId))
+                .data.createdAt + duration.value(1, 's');
+        }
+        allow get, list: if member(threadId);
+        allow create: if member(threadId) && validAnimationSignal();
+        allow update: if member(threadId) && validAnimationSignal() &&
+          request.resource.data.playId != resource.data.playId &&
+          request.time >= resource.data.triggeredAt + duration.value(1, 's');
+        allow delete: if false;
+      }
+
       match /messages/{messageId} {
         allow get, list: if member(threadId);
         allow create: if member(threadId) &&
