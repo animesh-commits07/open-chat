@@ -1,4 +1,4 @@
-import {doc,onSnapshot,runTransaction,serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {doc,onSnapshot,runTransaction,updateDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 // Private two-player Tic-Tac-Toe. No chat messages or other features are
 // written here: one /threads/{threadId}/games/current Firestore document.
@@ -170,12 +170,10 @@ export function createTicTacToeController({db,getContext}){
       }
     );
   }
-  async function runAction(operation,preview=null){
+  async function runAction(operation){
     if(isBusy || !stillCurrent() || !serverReady || !reference)return;
     const original=scope,ref=reference;
-    isBusy=true;errorMessage='';
-    if(preview)pendingMove=preview;
-    render();
+    isBusy=true;errorMessage='';render();
     try{
       await runTransaction(db,async tx=>{
         const snap=await tx.get(ref);
@@ -217,7 +215,7 @@ export function createTicTacToeController({db,getContext}){
       tx.update(ref,{state:next,updatedAt:serverTimestamp()});
     });
   }
-  function makeMove(index){
+  async function makeMove(index){
     if(!Number.isInteger(index)||index<0||index>8 ||
        !game || game.state!=='playing' || !stillCurrent() ||
        !serverReady || isBusy || pendingMove ||
@@ -226,23 +224,32 @@ export function createTicTacToeController({db,getContext}){
     const mark=game.turn;
     if(!((mark==='X' && game.xUid===scope.uid) ||
          (mark==='O' && game.oUid===scope.uid)))return;
-    return runAction(async(tx,snap,current,ref)=>{
-      if(!snap.exists())throw Error('Game was removed.');
-      const currentGame=snap.data(),mark=currentGame.turn;
-      if(currentGame.state!=='playing'||
-        !((mark==='X'&&currentGame.xUid===current.uid)||
-          (mark==='O'&&currentGame.oUid===current.uid)))
-        throw Error('Wait for your turn.');
-      if(!Array.isArray(currentGame.board)||currentGame.board.length!==9||
-        currentGame.board[index]!=='')throw Error('That square is unavailable.');
-      const board=currentGame.board.slice();
-      board[index]=mark;
-      const result=gameMoveOutcome(board,mark);
-      tx.update(ref,{
+    // The latest server-verified board already determines the legal move.
+    // A direct update skips the transaction's preliminary remote get. The
+    // existing Firestore rules re-check turn, one empty square and outcome
+    // against the true server document before accepting the write.
+    const board=game.board.slice();
+    board[index]=mark;
+    const result=gameMoveOutcome(board,mark);
+    const original=scope,ref=reference;
+    isBusy=true;errorMessage='';pendingMove={index,mark};render();
+    try{
+      await updateDoc(ref,{
         board,turn:mark==='X'?'O':'X',state:result.state,
         winner:result.winner,updatedAt:serverTimestamp()
       });
-    },{index,mark});
+      if(scope===original && stillCurrent())errorMessage='';
+    }catch(error){
+      if(scope===original && stillCurrent()){
+        pendingMove=null;
+        if(error?.code==='permission-denied'){
+          errorMessage='Move was not saved. The turn may have changed, or Firebase Rules may need updating. Please retry after checking the board.';
+          render();
+        }else showError(error);
+      }
+    }finally{
+      if(scope===original){isBusy=false;render()}
+    }
   }
 
   button.onclick=()=>{if(stillCurrent())setOpen(!panelOpen)};
