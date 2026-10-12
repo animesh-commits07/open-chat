@@ -1,4 +1,4 @@
-import {doc,onSnapshot,runTransaction,serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import {doc,onSnapshot,runTransaction,updateDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 // Private two-player Tic-Tac-Toe. No chat messages or other features are
 // written here: one /threads/{threadId}/games/current Firestore document.
@@ -28,6 +28,9 @@ export function createTicTacToeController({db,getContext}){
   const errorUI=$('gameError'),closeButton=$('gameCloseBtn');
   let scope=null,reference=null,unsubscribe=null,game=null,serverReady=false;
   let isBusy=false,panelOpen=false,errorMessage='',notifiedInvite=null;
+  // Only the active player sees the predicted square. Firestore rules still
+  // authorize the move; a rejected transaction removes this preview.
+  let pendingMove=null;
 
   const cells=Array.from({length:9},(_,index)=>{
     const cell=document.createElement('button');
@@ -97,7 +100,8 @@ export function createTicTacToeController({db,getContext}){
         const myTurn=game.turn===mine;
         text=myTurn?'Your turn ('+(mine==='X'?'❌':'⭕')+')':
           'Waiting for '+friend+' ('+(other==='X'?'❌':'⭕')+')…';
-        canPlay=myTurn && !isBusy && !errorMessage;
+        if(pendingMove)text='Sending your move…';
+        canPlay=myTurn && !isBusy && !pendingMove;
         second='End game';onSecond=()=>respond('cancelled');
       }else{
         if(game.state==='won')
@@ -109,12 +113,19 @@ export function createTicTacToeController({db,getContext}){
         main='Play again';onMain=inviteGame;
       }
     }
+    // Render immediately on tap, without waiting for the transaction's
+    // remote read/commit. Do not modify the shared Firestore snapshot.
+    if(pendingMove && board[pendingMove.index]===''){
+      board=board.slice();
+      board[pendingMove.index]=pendingMove.mark;
+    }
     status.textContent=text;
     for(let i=0;i<cells.length;i++){
       const value=board[i],cell=cells[i];
       cell.textContent=value==='X'?'❌':value==='O'?'⭕':'';
       cell.disabled=!canPlay || !serverReady || value!=='' || !activeScope;
       cell.classList.toggle('is-playable',!cell.disabled);
+      cell.classList.toggle('is-pending',!!pendingMove && pendingMove.index===i);
       cell.setAttribute('aria-label','Row '+(Math.floor(i/3)+1)+
         ', column '+(i%3+1)+': '+(value==='X'?'X':value==='O'?'O':'empty'));
     }
@@ -125,7 +136,7 @@ export function createTicTacToeController({db,getContext}){
   function close(){
     if(unsubscribe){unsubscribe();unsubscribe=null}
     scope=null;reference=null;game=null;serverReady=false;
-    isBusy=false;errorMessage='';notifiedInvite=null;
+    isBusy=false;errorMessage='';notifiedInvite=null;pendingMove=null;
     setOpen(false);render();
   }
   function open(threadId,uid,friendUid,friendName='friend'){
@@ -140,6 +151,12 @@ export function createTicTacToeController({db,getContext}){
         if(!stillCurrent()||scope!==matchedScope)return;
         game=snapshot.exists()?snapshot.data():null;
         serverReady=!snapshot.metadata.fromCache;
+        // Only a confirmed server snapshot can settle the optimistic tile.
+        // Intermediate listener events must not flash the old board back.
+        if(pendingMove && serverReady && !snapshot.metadata.hasPendingWrites &&
+           game?.board?.[pendingMove.index]===pendingMove.mark){
+          pendingMove=null;
+        }
         if(serverReady && game?.state==='invited' && game.oUid===scope.uid){
           const created=game.createdAt?.toMillis?.();
           const key=String(created||'waiting');
@@ -164,7 +181,10 @@ export function createTicTacToeController({db,getContext}){
       });
       if(scope===original && stillCurrent())errorMessage='';
     }catch(error){
-      if(scope===original && stillCurrent())showError(error);
+      if(scope===original && stillCurrent()){
+        pendingMove=null;
+        showError(error);
+      }
     }finally{
       if(scope===original){isBusy=false;render()}
     }
@@ -195,25 +215,41 @@ export function createTicTacToeController({db,getContext}){
       tx.update(ref,{state:next,updatedAt:serverTimestamp()});
     });
   }
-  function makeMove(index){
-    if(!Number.isInteger(index)||index<0||index>8)return;
-    return runAction(async(tx,snap,current,ref)=>{
-      if(!snap.exists())throw Error('Game was removed.');
-      const currentGame=snap.data(),mark=currentGame.turn;
-      if(currentGame.state!=='playing'||
-        !((mark==='X'&&currentGame.xUid===current.uid)||
-          (mark==='O'&&currentGame.oUid===current.uid)))
-        throw Error('Wait for your turn.');
-      if(!Array.isArray(currentGame.board)||currentGame.board.length!==9||
-        currentGame.board[index]!=='')throw Error('That square is unavailable.');
-      const board=currentGame.board.slice();
-      board[index]=mark;
-      const result=gameMoveOutcome(board,mark);
-      tx.update(ref,{
+  async function makeMove(index){
+    if(!Number.isInteger(index)||index<0||index>8 ||
+       !game || game.state!=='playing' || !stillCurrent() ||
+       !serverReady || isBusy || pendingMove ||
+       !Array.isArray(game.board) || game.board.length!==9 ||
+       game.board[index]!=='')return;
+    const mark=game.turn;
+    if(!((mark==='X' && game.xUid===scope.uid) ||
+         (mark==='O' && game.oUid===scope.uid)))return;
+    // The latest server-verified board already determines the legal move.
+    // A direct update skips the transaction's preliminary remote get. The
+    // existing Firestore rules re-check turn, one empty square and outcome
+    // against the true server document before accepting the write.
+    const board=game.board.slice();
+    board[index]=mark;
+    const result=gameMoveOutcome(board,mark);
+    const original=scope,ref=reference;
+    isBusy=true;errorMessage='';pendingMove={index,mark};render();
+    try{
+      await updateDoc(ref,{
         board,turn:mark==='X'?'O':'X',state:result.state,
         winner:result.winner,updatedAt:serverTimestamp()
       });
-    });
+      if(scope===original && stillCurrent())errorMessage='';
+    }catch(error){
+      if(scope===original && stillCurrent()){
+        pendingMove=null;
+        if(error?.code==='permission-denied'){
+          errorMessage='Move was not saved. The turn may have changed, or Firebase Rules may need updating. Please retry after checking the board.';
+          render();
+        }else showError(error);
+      }
+    }finally{
+      if(scope===original){isBusy=false;render()}
+    }
   }
 
   button.onclick=()=>{if(stillCurrent())setOpen(!panelOpen)};
