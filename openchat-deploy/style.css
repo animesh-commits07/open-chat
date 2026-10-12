@@ -528,7 +528,7 @@
 @keyframes chat-fx-explode{
   0%{opacity:0;transform:translate(-50%,-50%) scale(.14) rotate(0deg)}
   17%{opacity:1;transform:translate(calc(-50% + var(--fx-mid-x)),calc(-50% + var(--fx-mid-y))) scale(1.2) rotate(15deg)}
-  62%{opacity:1;transform:translate(calc(-50% + var(--fx-x)*.83),calc(-50% + var(--fx-y)*.83)) scale(1) rotate(var(--fx-spin))}
+  62%{opacity:1;transform:translate(calc(-50% + var(--fx-outer-x)),calc(-50% + var(--fx-outer-y))) scale(1) rotate(var(--fx-spin))}
   100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(.45) rotate(var(--fx-spin))}
 }
 @keyframes chat-fx-float{
@@ -538,7 +538,7 @@
   100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y) - 22px)) scale(.85) rotate(15deg)}
 }
 @keyframes chat-fx-fall{
-  0%{opacity:0;transform:translate(calc(-50% + var(--fx-x)*.5),-110px) scale(.7) rotate(-24deg)}
+  0%{opacity:0;transform:translate(calc(-50% + var(--fx-half-x)),-110px) scale(.7) rotate(-24deg)}
   15%{opacity:1}
   77%{opacity:1}
   100%{opacity:0;transform:translate(calc(-50% + var(--fx-x)),calc(-50% + var(--fx-y))) scale(1) rotate(var(--fx-spin))}
