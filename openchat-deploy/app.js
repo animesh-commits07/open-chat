@@ -23,7 +23,7 @@ const animatedMessages=createAnimatedMessagesController();
 const messageEffects=createMessageEffectsController({db,
   getContext:()=>me&&active?{threadId:active.id,uid:me.uid}:null,
   onStatus:message=>status(message),
-  onPlay:(messageId,effect)=>animatedMessages.playMessage(messageId,effect)
+  onPlay:(messageId,effect,fullScreen)=>animatedMessages.playMessage(messageId,effect,fullScreen)
 });
 // Tic-Tac-Toe is isolated from messaging, push, reactions and typing.
 // The controller is active only for the current two-person conversation.
@@ -1504,6 +1504,7 @@ function openChat(id,u){
       }
       container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
       messageEffects.afterMessagesRender();
+      messageEffects.observeMessages(snapshot);
       if(!snapshot.metadata.fromCache)markVisibleChatSeen();
       status('Private chat • latest 300 messages');
     },
