@@ -172,30 +172,31 @@ export function createAnimatedMessagesController(){
     try{return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true}
     catch{return false}
   }
-  function play(node,name){
+  function play(node,name,fullScreen=false){
     if(!node||!stage||!validAnimatedMessageEffect(name)||
        document.visibilityState==='hidden')return false;
     const data=ANIMATED_MESSAGE_EFFECTS[name];
     const box=node.getBoundingClientRect?.();
     const parent=stage.getBoundingClientRect?.();
     if(!box||!parent||!parent.width||!parent.height)return false;
-    const centerX=Math.max(5,Math.min(parent.width-5,
+    const centerX=fullScreen?parent.width/2:Math.max(5,Math.min(parent.width-5,
       box.left-parent.left+box.width/2));
-    const centerY=Math.max(5,Math.min(parent.height-5,
+    const centerY=fullScreen?parent.height/2:Math.max(5,Math.min(parent.height-5,
       box.top-parent.top+Math.min(box.height/2,70)));
     const scene=document.createElement('span');
     scene.className='chat-fx-scene chat-fx-'+name+' chat-fx-motion-'+data.motion;
     scene.setAttribute('aria-hidden','true');
-    scene.style.left=centerX+'px';
-    scene.style.top=centerY+'px';
+    scene.style.left=(fullScreen?window.innerWidth/2:centerX)+'px';
+    scene.style.top=(fullScreen?window.innerHeight/2:centerY)+'px';
+    if(fullScreen){scene.style.position='fixed';scene.style.zIndex='99999';scene.style.pointerEvents='none';}
     const gentler=reducedMotion();
-    const n=gentler?1:18;
+    const n=gentler?1:(fullScreen?42:18);
     for(let i=0;i<n;i++){
       const p=document.createElement('span');
       p.className='chat-fx-particle';
       p.textContent=data.particles[i%data.particles.length];
       const theta=(i*137.508+17)*Math.PI/180;
-      const radius=64+(i%5)*20;
+      const radius=fullScreen?100+(i%8)*32:64+(i%5)*20;
       let dx=Math.cos(theta)*radius,dy=Math.sin(theta)*radius;
       if(data.motion==='float'||data.motion==='rise'){
         dx=(i%2?-1:1)*(16+(i*29)%95);
@@ -234,11 +235,11 @@ export function createAnimatedMessagesController(){
     timers.add(timer);
     return true;
   }
-  function playMessage(messageId,effect){
+  function playMessage(messageId,effect,fullScreen=false){
     if(!threadId||!validAnimatedMessageEffect(effect))return false;
     const node=Array.from(messages.children).find(el=>
       el.dataset?.messageId===messageId);
-    return !!node&&play(node,effect);
+    return !!node&&play(node,effect,fullScreen);
   }
   // Legacy compatibility: confirming a send does NOT start any effect.
   function confirmSentMessage(){return}

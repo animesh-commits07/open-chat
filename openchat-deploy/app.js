@@ -5,8 +5,8 @@ import {firebaseConfig} from './firebase-config.js';
 import {createTicTacToeController} from './tic-tac-toe.js?v=fast-game-20261012';
 import {createQuickQuizController} from './quick-quiz.js?v=fast-game-20261012';
 import {createLiveDoodleController} from './live-doodle.js?v=doodle-screen-20261012';
-import {createAnimatedMessagesController} from './animated-messages.js?v=manual-fx-29-20261012';
-import {createMessageEffectsController} from './message-effects.js?v=manual-fx-29-20261012';
+import {createAnimatedMessagesController} from './animated-messages.js?v=fullscreen-fx-30-20261013';
+import {createMessageEffectsController} from './message-effects.js?v=fullscreen-fx-30-20261013';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),provider=new GoogleAuthProvider();
 // Store Firebase's own auth session across tab closes, Back navigation and browser relaunch.
 // Never save Firebase credentials or ID tokens manually in localStorage.
@@ -23,7 +23,7 @@ const animatedMessages=createAnimatedMessagesController();
 const messageEffects=createMessageEffectsController({db,
   getContext:()=>me&&active?{threadId:active.id,uid:me.uid}:null,
   onStatus:message=>status(message),
-  onPlay:(messageId,effect)=>animatedMessages.playMessage(messageId,effect)
+  onPlay:(messageId,effect,fullScreen)=>animatedMessages.playMessage(messageId,effect,fullScreen)
 });
 // Tic-Tac-Toe is isolated from messaging, push, reactions and typing.
 // The controller is active only for the current two-person conversation.
@@ -1504,6 +1504,7 @@ function openChat(id,u){
       }
       container.scrollTop=atBottom?container.scrollHeight:previousScrollTop;
       messageEffects.afterMessagesRender();
+      messageEffects.observeMessages(snapshot);
       if(!snapshot.metadata.fromCache)markVisibleChatSeen();
       status('Private chat • latest 300 messages');
     },

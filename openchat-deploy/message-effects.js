@@ -2,7 +2,7 @@ import {
   collection,doc,onSnapshot,orderBy,query,limit,setDoc,serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {ANIMATED_MESSAGE_EFFECTS,validAnimatedMessageEffect}
-  from './animated-messages.js?v=manual-fx-29-20261012';
+  from './animated-messages.js?v=fullscreen-fx-30-20261013';
 
 // A single validated signal document replays an effect around ONE chat
 // message on both devices. Never changes message text, reactions, reply,
@@ -16,6 +16,7 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
   let context=null,unsubscribe=null,firstServerSnapshot=false;
   let seen=new Map(),revealTimers=new Set(),choice=null;
   let writes=new Set(),queuedReplay=new Map();
+  let openingReplayChecked=false;
   const current=()=>{
     const now=getContext();
     return !!context&&!!now&&now.threadId===context.threadId&&now.uid===context.uid;
@@ -29,9 +30,9 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
     revealTimers.clear();
   }
   // One click produces the same server-confirmed animation on BOTH phones.
-  function play(messageId,effect){
+  function play(messageId,effect,fullScreen=false){
     if(!current()||!EFFECT_NAMES.has(effect))return false;
-    return !!onPlay?.(messageId,effect);
+    return !!onPlay?.(messageId,effect,fullScreen);
   }
   function afterMessagesRender(){
     if(!current())return;
@@ -60,10 +61,30 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
     }
     firstServerSnapshot=true;
   }
+  // Replay only the newest incoming animated message once per recipient/device.
+  // Keep the seen marker per account and conversation, across chat reopening.
+  function observeMessages(snapshot){
+    if(!current()||openingReplayChecked||snapshot.metadata.fromCache)return;
+    const candidates=snapshot.docs.filter(item=>!item.metadata.hasPendingWrites &&
+      item.data()?.senderId!==context.uid &&
+      validAnimatedMessageEffect(item.data()?.effect));
+    if(!candidates.length){openingReplayChecked=true;return}
+    const latest=candidates[0],data=latest.data();
+    const key='openchat_latest_animated_seen_v2:'+context.uid+':'+context.threadId;
+    const marker=latest.id;
+    let previous='';
+    try{previous=localStorage.getItem(key)||''}catch{}
+    if(previous===marker){openingReplayChecked=true;return}
+    // Only acknowledge once playback can actually start.
+    if(play(latest.id,data.effect,true)){
+      try{localStorage.setItem(key,marker)}catch{}
+      openingReplayChecked=true;
+    }
+  }
   function open(threadId,uid){
     close();
     if(!threadId||!uid)return;
-    context={threadId,uid};
+    context={threadId,uid};openingReplayChecked=false;
     const original=context;
     unsubscribe=onSnapshot(
       query(collection(db,'threads',threadId,'messageEffects'),
@@ -177,8 +198,8 @@ export function createMessageEffectsController({db,getContext,onStatus,onPlay}){
   }
   function close(){
     if(unsubscribe){unsubscribe();unsubscribe=null}
-    context=null;firstServerSnapshot=false;seen.clear();
+    context=null;firstServerSnapshot=false;openingReplayChecked=false;seen.clear();
     dismiss();clearTimers();queuedReplay.clear();
   }
-  return {open,close,decorate,beforeMessagesRender,afterMessagesRender};
+  return {open,close,decorate,beforeMessagesRender,afterMessagesRender,observeMessages};
 }
