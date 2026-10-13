@@ -186,8 +186,9 @@ export function createAnimatedMessagesController(){
     const scene=document.createElement('span');
     scene.className='chat-fx-scene chat-fx-'+name+' chat-fx-motion-'+data.motion;
     scene.setAttribute('aria-hidden','true');
-    scene.style.left=centerX+'px';
-    scene.style.top=centerY+'px';
+    scene.style.left=(fullScreen?window.innerWidth/2:centerX)+'px';
+    scene.style.top=(fullScreen?window.innerHeight/2:centerY)+'px';
+    if(fullScreen){scene.style.position='fixed';scene.style.zIndex='99999';scene.style.pointerEvents='none';}
     const gentler=reducedMotion();
     const n=gentler?1:(fullScreen?42:18);
     for(let i=0;i<n;i++){
